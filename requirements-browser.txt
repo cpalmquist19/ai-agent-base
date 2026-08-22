@@ -1,0 +1,3 @@
+# Optional — inspect_page tool (run `playwright install chromium` after install)
+-r requirements.txt
+playwright>=1.40

@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Local Agent</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            page: "#F4F6F8",
+            ink: "#0F172A",
+            accent: {
+              DEFAULT: "#0D9488",
+              hover: "#0F766E",
+              soft: "#CCFBF1",
+            },
+          },
+          fontFamily: {
+            sans: ['"IBM Plex Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
+            mono: ['"IBM Plex Mono"', "ui-monospace", "monospace"],
+          },
+          keyframes: {
+            pulseSoft: {
+              "0%, 100%": { opacity: "1" },
+              "50%": { opacity: "0.55" },
+            },
+            fadeIn: {
+              from: { opacity: "0", transform: "translateY(4px)" },
+              to: { opacity: "1", transform: "translateY(0)" },
+            },
+            typingBounce: {
+              "0%, 60%, 100%": { transform: "translateY(0)", opacity: "0.4" },
+              "30%": { transform: "translateY(-3px)", opacity: "1" },
+            },
+          },
+          animation: {
+            pulseSoft: "pulseSoft 1.4s ease-in-out infinite",
+            fadeIn: "fadeIn 180ms ease-out",
+            typingBounce: "typingBounce 1.2s ease-in-out infinite",
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    html, body { height: 100%; }
+    body { font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+    .msg-prose pre {
+      position: relative;
+      background: #0F172A;
+      color: #E2E8F0;
+      border-radius: 0.5rem;
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      font-size: 0.8125rem;
+      margin: 0.5rem 0;
+    }
+    .msg-prose pre[data-lang]::before {
+      content: attr(data-lang);
+      display: block;
+      margin: -0.75rem -1rem 0.5rem;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.5rem 0.5rem 0 0;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94A3B8;
+      font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .msg-prose code {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8125rem;
+    }
+    .msg-prose :not(pre) > code {
+      background: #E2E8F0;
+      color: #0F172A;
+      padding: 0.1rem 0.35rem;
+      border-radius: 0.25rem;
+    }
+    .msg-prose blockquote {
+      border-left: 3px solid #0D9488;
+      background: #F0FDFA;
+      margin: 0.5rem 0;
+      padding: 0.5rem 0.75rem;
+      color: #334155;
+      font-size: 0.875rem;
+    }
+    .msg-prose blockquote > :first-child { margin-top: 0; }
+    .msg-prose blockquote > :last-child { margin-bottom: 0; }
+    .msg-prose p { margin: 0.35rem 0; }
+    .msg-prose p:first-child { margin-top: 0; }
+    .msg-prose p:last-child { margin-bottom: 0; }
+    .msg-prose h1, .msg-prose h2, .msg-prose h3, .msg-prose h4,
+    .msg-prose h5, .msg-prose h6 {
+      font-weight: 600;
+      line-height: 1.3;
+      color: #0F172A;
+      margin: 0.85rem 0 0.4rem;
+    }
+    .msg-prose h1:first-child, .msg-prose h2:first-child,
+    .msg-prose h3:first-child, .msg-prose h4:first-child,
+    .msg-prose h5:first-child, .msg-prose h6:first-child { margin-top: 0; }
+    .msg-prose h1 { font-size: 1.25rem; }
+    .msg-prose h2 { font-size: 1.125rem; }
+    .msg-prose h3 { font-size: 1rem; }
+    .msg-prose h4 { font-size: 0.9375rem; }
+    .msg-prose h5 { font-size: 0.875rem; }
+    .msg-prose h6 { font-size: 0.8125rem; color: #334155; }
+    .msg-prose ul, .msg-prose ol {
+      padding-left: 1.25rem;
+      margin: 0.35rem 0;
+    }
+    .msg-prose ul { list-style: disc; }
+    .msg-prose ol { list-style: decimal; }
+    .msg-prose li { margin: 0.15rem 0; }
+    .msg-prose li > p { margin: 0; }
+    .msg-prose a {
+      color: #0D9488;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .msg-prose a:hover { color: #0F766E; }
+    .msg-prose hr {
+      border: none;
+      border-top: 1px solid #E2E8F0;
+      margin: 0.75rem 0;
+    }
+    .msg-prose strong { font-weight: 600; }
+    .msg-prose em { font-style: italic; }
+    .msg-prose s { color: #64748B; }
+    .msg-prose .md-table-wrap {
+      overflow-x: auto;
+      margin: 0.5rem 0;
+      border: 1px solid #E2E8F0;
+      border-radius: 0.5rem;
+    }
+    .msg-prose table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+    .msg-prose th,
+    .msg-prose td {
+      padding: 0.45rem 0.65rem;
+      border-bottom: 1px solid #E2E8F0;
+      vertical-align: top;
+      text-align: left;
+    }
+    .msg-prose th {
+      background: #F8FAFC;
+      font-weight: 600;
+      color: #0F172A;
+      white-space: nowrap;
+    }
+    .msg-prose tbody tr:last-child td { border-bottom: none; }
+    .msg-prose tbody tr:hover td { background: #F8FAFC; }
+    .msg-prose .md-math-block {
+      margin: 0.65rem 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .msg-prose .md-math-block > .katex-display {
+      margin: 0;
+    }
+    .msg-prose .md-math-inline .katex {
+      font-size: 1em;
+    }
+    .msg-prose .md-figure {
+      margin: 0.65rem 0;
+      text-align: center;
+    }
+    .msg-prose .md-image-preview-btn {
+      display: inline-block;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: zoom-in;
+      border-radius: 0.5rem;
+      line-height: 0;
+      transition: box-shadow 150ms ease;
+    }
+    .msg-prose .md-image-preview-btn:hover {
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.22);
+    }
+    .msg-prose .md-image-preview-btn:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.35);
+    }
+    .msg-prose .md-figure img,
+    .msg-prose img.md-image-block {
+      display: block;
+      max-width: min(100%, 280px);
+      max-height: 180px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 0.5rem;
+      border: 1px solid #E2E8F0;
+      background: #F8FAFC;
+    }
+    .msg-prose .md-figure figcaption {
+      margin-top: 0.4rem;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      color: #64748B;
+    }
+    .msg-prose img.md-image-inline {
+      display: inline-block;
+      max-height: 1.35em;
+      vertical-align: -0.2em;
+      border-radius: 0.2rem;
+    }
+    .msg-prose img.md-image-broken {
+      display: none;
+    }
+    .msg-prose .md-image-preview-btn.md-image-broken {
+      display: none;
+    }
+    #composer:focus {
+      outline: none;
+    }
+    #composer-wrap:focus-within {
+      border-color: #0D9488;
+      box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.2);
+    }
+    #composer-wrap.composer-drag-over {
+      border-radius: 0.75rem;
+      background: #F0FDFA;
+      box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.35);
+    }
+    #composer-wrap.composer-drag-over #composer {
+      background: transparent;
+    }
+    #composer-wrap {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 0.75rem;
+      border: 1px solid #E2E8F0;
+      background: #F4F6F8;
+      transition: background-color 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+    }
+    #composer {
+      display: block;
+      width: 100%;
+      min-height: 2.75rem;
+      max-height: 7.5rem;
+      resize: none;
+      overflow-y: auto;
+      border: none;
+      background: transparent;
+      padding: 0.625rem 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: #0F172A;
+      outline: none;
+    }
+    #composer::placeholder {
+      color: #94A3B8;
+    }
+    #composer-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      border-top: 1px solid #E2E8F0;
+      padding: 0.375rem 0.5rem;
+      background: #fff;
+    }
+    .composer-attach-btn {
+      display: inline-flex;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      padding: 0.375rem;
+      color: #64748B;
+      transition: color 120ms ease, background-color 120ms ease;
+    }
+    .composer-attach-btn:hover {
+      background: #F1F5F9;
+      color: #0D9488;
+    }
+    .composer-attach-btn.is-active {
+      background: #CCFBF1;
+      color: #0F766E;
+    }
+    #skills-menu-wrap {
+      position: relative;
+    }
+    #skills-menu {
+      position: fixed;
+      z-index: 100;
+      min-width: 16rem;
+      max-width: min(22rem, calc(100vw - 2rem));
+      max-height: min(16rem, calc(100vh - 1rem));
+      overflow-y: auto;
+      border: 1px solid #E2E8F0;
+      border-radius: 0.75rem;
+      background: #fff;
+      padding: 0.375rem;
+      box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.12), 0 4px 6px -4px rgb(15 23 42 / 0.08);
+    }
+    #skills-menu.hidden {
+      display: none;
+    }
+    .skills-menu-item {
+      display: block;
+      width: 100%;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.625rem;
+      text-align: left;
+      transition: background-color 120ms ease;
+    }
+    .skills-menu-item:hover {
+      background: #F1F5F9;
+    }
+    .skills-menu-item-name {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #0F172A;
+    }
+    .skills-menu-item-desc {
+      margin-top: 0.125rem;
+      font-size: 0.6875rem;
+      line-height: 1.35;
+      color: #64748B;
+    }
+    .skills-menu-empty {
+      padding: 0.625rem 0.75rem;
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: #64748B;
+    }
+    .skill-chip {
+      display: inline-flex;
+      max-width: 100%;
+      align-items: center;
+      gap: 0.375rem;
+      border-radius: 0.5rem;
+      border: 1px solid #99F6E4;
+      background: #F0FDFA;
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      color: #0F766E;
+    }
+    .skill-chip-label {
+      font-weight: 600;
+    }
+    .msg-skill-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+      border-radius: 999px;
+      border: 1px solid #99F6E4;
+      background: #F0FDFA;
+      padding: 0.125rem 0.625rem;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: #0F766E;
+    }
+    .composer-action-btn {
+      border-radius: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      line-height: 1.25;
+      transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+    }
+    #composer-status {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      border-radius: 0.5rem;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+      animation: fadeIn 180ms ease-out;
+    }
+    #composer-status.hidden {
+      display: none;
+    }
+    #composer-status.composer-status-error {
+      border: 1px solid #FECACA;
+      background: #FEF2F2;
+      color: #991B1B;
+    }
+    #composer-status.composer-status-warning {
+      border: 1px solid #FDE68A;
+      background: #FFFBEB;
+      color: #92400E;
+    }
+    #composer-status.composer-status-success {
+      border: 1px solid #A7F3D0;
+      background: #ECFDF5;
+      color: #065F46;
+    }
+    #composer-status .composer-status-icon {
+      flex-shrink: 0;
+      margin-top: 0.1rem;
+      font-weight: 700;
+    }
+    .msg-actions {
+      min-height: 1.25rem;
+    }
+    .msg-copy-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.2rem;
+      border-radius: 0.375rem;
+      color: #94A3B8;
+      transition: color 150ms ease, background-color 150ms ease;
+    }
+    .msg-copy-btn:hover {
+      color: #64748B;
+      background: #F1F5F9;
+    }
+    .msg-copy-btn:focus-visible {
+      outline: 2px solid #0D9488;
+      outline-offset: 1px;
+    }
+    .msg-copy-btn--copied {
+      color: #0D9488;
+    }
+    .explorer-row[data-kind="file"] {
+      cursor: grab;
+    }
+    .explorer-row[data-kind="file"]:active {
+      cursor: grabbing;
+    }
+    #session-list::-webkit-scrollbar,
+    #messages::-webkit-scrollbar,
+    #tools-list::-webkit-scrollbar,
+    #chats-panel::-webkit-scrollbar,
+    #file-explorer::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    #session-list::-webkit-scrollbar-thumb,
+    #messages::-webkit-scrollbar-thumb,
+    #tools-list::-webkit-scrollbar-thumb,
+    #chats-panel::-webkit-scrollbar-thumb,
+    #file-explorer::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 999px;
+    }
+    .explorer-row {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      width: 100%;
+      border-radius: 0.375rem;
+      padding: 0.125rem 0.25rem;
+      text-align: left;
+      font-size: 0.8125rem;
+      line-height: 1.35;
+      color: #334155;
+      transition: background-color 120ms ease;
+    }
+    .explorer-row:hover {
+      background: #F1F5F9;
+    }
+    .explorer-row.is-selected {
+      background: #CCFBF1;
+      color: #0F766E;
+    }
+    .explorer-chevron {
+      display: inline-flex;
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.25rem;
+      color: #94A3B8;
+      transition: transform 150ms ease, color 120ms ease;
+    }
+    .explorer-chevron:hover {
+      color: #64748B;
+      background: #E2E8F0;
+    }
+    .explorer-chevron.is-expanded {
+      transform: rotate(90deg);
+    }
+    .explorer-chevron.is-hidden {
+      visibility: hidden;
+    }
+    .explorer-icon {
+      display: inline-flex;
+      width: 1rem;
+      height: 1rem;
+      flex-shrink: 0;
+      align-items: center;
+      justify-content: center;
+    }
+    .explorer-name {
+      flex: 1 0 auto;
+      white-space: nowrap;
+    }
+    .panel-resize-handle {
+      position: relative;
+      z-index: 2;
+      flex-shrink: 0;
+      width: 6px;
+      margin: 0 -3px;
+      cursor: col-resize;
+      touch-action: none;
+      background: transparent;
+      transition: background-color 120ms ease;
+    }
+    .panel-resize-handle::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      transform: translateX(-50%);
+      background: #E2E8F0;
+      transition: background-color 120ms ease, width 120ms ease;
+    }
+    .panel-resize-handle:hover::after,
+    .panel-resize-handle.is-dragging::after {
+      width: 3px;
+      background: #0D9488;
+    }
+    body.panel-resizing {
+      cursor: col-resize !important;
+      user-select: none;
+    }
+    body.panel-resizing * {
+      cursor: col-resize !important;
+    }
+    #file-explorer {
+      overflow: auto;
+    }
+    #file-explorer .explorer-node {
+      min-width: 100%;
+      width: max-content;
+    }
+    .explorer-view-toggle {
+      display: flex;
+      gap: 0.25rem;
+      margin-bottom: 0.5rem;
+      padding: 0.125rem;
+      border-radius: 0.5rem;
+      border: 1px solid #E2E8F0;
+      background: #F8FAFC;
+    }
+    .explorer-view-btn {
+      flex: 1 1 0;
+      border-radius: 0.375rem;
+      border: none;
+      background: transparent;
+      padding: 0.375rem 0.5rem;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: #64748B;
+      transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+    }
+    .explorer-view-btn:hover {
+      color: #334155;
+    }
+    .explorer-view-btn.is-active {
+      background: #FFFFFF;
+      color: #0F766E;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    .explorer-toolbar-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.75rem;
+      height: 1.75rem;
+      flex-shrink: 0;
+      border-radius: 0.375rem;
+      border: 1px solid #E2E8F0;
+      background: #FFFFFF;
+      color: #64748B;
+      transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+    }
+    .explorer-toolbar-btn:hover:not(:disabled) {
+      border-color: #0D9488;
+      color: #0F766E;
+      background: #F0FDFA;
+    }
+    .explorer-toolbar-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .explorer-toolbar-btn.is-spinning svg {
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes typingBounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-3px); opacity: 1; }
+    }
+    .typing-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0.15rem 0;
+      min-height: 1.25rem;
+    }
+    .typing-dots span {
+      display: block;
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #0D9488;
+      animation: typingBounce 1.2s ease-in-out infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+    .tool-events {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+    .tool-event {
+      border-color: #E2E8F0;
+      background: #F8FAFC;
+    }
+    .tool-event[data-ok="false"] {
+      border-color: #FECACA;
+      background: #FEF2F2;
+    }
+    .tool-event summary {
+      list-style: none;
+      cursor: pointer;
+      user-select: none;
+    }
+    .tool-event summary::-webkit-details-marker { display: none; }
+    .tool-event summary::marker { content: ""; }
+    .tool-event-body {
+      margin-top: 0.375rem;
+      border-top: 1px solid #E2E8F0;
+      padding-top: 0.375rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #475569;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .tool-event[data-ok="false"] .tool-event-body {
+      border-top-color: #FECACA;
+      color: #991B1B;
+    }
+
+    .activity-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+      margin-bottom: 0.875rem;
+    }
+    .activity-item {
+      border-left: 2px solid #99F6E4;
+      padding-left: 0.625rem;
+    }
+    .activity-item[data-active="true"] {
+      border-left-color: #0D9488;
+    }
+    .activity-item[data-kind="tool_done"][data-ok="false"] {
+      border-left-color: #FCA5A5;
+    }
+    .activity-label {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #334155;
+    }
+    .activity-item[data-active="true"] .activity-label {
+      color: #0F766E;
+    }
+    .activity-thinking-title {
+      font-weight: 500;
+    }
+    .activity-thinking-snippet {
+      margin-top: 0.125rem;
+      font-size: 10px;
+      line-height: 1.45;
+      color: #64748B;
+    }
+    .activity-item[data-active="true"] .activity-thinking-snippet {
+      color: #0D9488;
+    }
+    .activity-icon {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      margin-top: 1px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .activity-icon--pulse {
+      border-radius: 999px;
+      background: #0D9488;
+      animation: activityPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes activityPulse {
+      0%, 100% { opacity: 0.35; transform: scale(0.85); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+    .activity-elapsed {
+      margin-top: 0.125rem;
+      font-size: 10px;
+      line-height: 1.3;
+      color: #94A3B8;
+      font-variant-numeric: tabular-nums;
+    }
+    .activity-content-block {
+      margin-top: 0.25rem;
+    }
+    .activity-timeline .activity-content-block {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    .activity-content-block .activity-elapsed {
+      margin-top: 0.375rem;
+    }
+    .activity-item .tool-event {
+      margin-top: 0.25rem;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #E2E8F0;
+      border-top-color: #0D9488;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    .loading-spinner-lg {
+      width: 18px;
+      height: 18px;
+      border-width: 2px;
+    }
+    .widget-loading-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border-radius: inherit;
+      background: rgba(244, 246, 248, 0.88);
+      backdrop-filter: blur(2px);
+    }
+    .widget-loading-overlay.hidden {
+      display: none;
+    }
+    .col-header {
+      height: 4.5rem;
+      flex-shrink: 0;
+    }
+    .explorer-row.is-editor-open .explorer-name {
+      color: #0F766E;
+      font-weight: 600;
+    }
+    #file-editor .editor-tabbar-wrap {
+      display: flex;
+      flex-shrink: 0;
+      background: #21252b;
+      border-bottom: 1px solid #181a1f;
+    }
+    #file-editor .editor-tabbar-wrap.hidden {
+      display: none;
+    }
+    .editor-tabbar {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      overflow-x: auto;
+      padding: 0 0.375rem;
+      scrollbar-width: thin;
+    }
+    .editor-tabbar::-webkit-scrollbar {
+      height: 4px;
+    }
+    .editor-tabbar::-webkit-scrollbar-thumb {
+      background: #4b5263;
+      border-radius: 999px;
+    }
+    .editor-tab {
+      display: inline-flex;
+      align-items: center;
+      max-width: 11rem;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      border-bottom: none;
+      border-radius: 0.375rem 0.375rem 0 0;
+      padding: 0.4375rem 0.5rem 0.4375rem 0.625rem;
+      font-size: 0.8125rem;
+      line-height: 1.25;
+      color: #9da5b4;
+      background: transparent;
+      cursor: pointer;
+      transition: background-color 120ms ease, color 120ms ease;
+    }
+    .editor-tab:hover {
+      color: #d1d5db;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .editor-tab.is-active {
+      background: #282c34;
+      border-color: #181a1f;
+      color: #e5e7eb;
+      font-weight: 500;
+    }
+    .editor-tab-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .editor-tab-close {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 0;
+      height: 1.125rem;
+      overflow: hidden;
+      opacity: 0;
+      border: none;
+      border-radius: 0.25rem;
+      background: transparent;
+      color: inherit;
+      font-size: 0.9375rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: opacity 120ms ease, width 120ms ease, background-color 120ms ease;
+    }
+    .editor-tab.is-active .editor-tab-close {
+      width: 1.125rem;
+      margin-left: 0.375rem;
+      opacity: 0.72;
+    }
+    .editor-tab.is-active .editor-tab-close:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    #editor-pane {
+      position: relative;
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+    .editor-code-wrap {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--editor-bg);
+    }
+    .editor-scroll {
+      display: flex;
+      align-items: stretch;
+      min-height: 0;
+      flex: 1;
+      overflow: hidden;
+      background: var(--editor-bg);
+    }
+    .editor-lines {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 1rem 0;
+      background: var(--editor-bg);
+    }
+    .editor-minimap {
+      position: relative;
+      flex: 0 0 5rem;
+      width: 5rem;
+      align-self: stretch;
+      min-height: 0;
+      overflow: hidden;
+      background: #1b1d23;
+      border-left: 1px solid var(--editor-border);
+      cursor: pointer;
+      touch-action: none;
+    }
+    .editor-minimap.hidden {
+      display: none;
+    }
+    .editor-minimap-scale {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .editor-minimap-lines {
+      transform-origin: top left;
+      opacity: 0.72;
+      padding: 0 2px;
+    }
+    .editor-minimap-line {
+      box-sizing: border-box;
+      height: var(--editor-line-height);
+      overflow: hidden;
+      white-space: nowrap;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      color: #abb2bf;
+    }
+    .editor-minimap-line.hljs,
+    .editor-minimap-line .hljs {
+      background: transparent !important;
+    }
+    .editor-code-wrap {
+      --editor-line-height: calc(0.8125rem * 1.6);
+    }
+    .editor-minimap-viewport {
+      position: absolute;
+      left: 2px;
+      right: 2px;
+      top: 0;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 2px;
+      pointer-events: none;
+      min-height: 2rem;
+      transition: background-color 80ms ease, border-color 80ms ease;
+    }
+    .editor-minimap.is-dragging .editor-minimap-viewport {
+      background: rgba(13, 148, 136, 0.14);
+      border-color: rgba(13, 148, 136, 0.45);
+    }
+    .editor-line {
+      display: flex;
+      align-items: stretch;
+      min-height: calc(0.8125rem * 1.6);
+    }
+    .editor-line-num {
+      flex-shrink: 0;
+      background: var(--editor-gutter-bg);
+      border-right: 1px solid var(--editor-border);
+      color: var(--editor-gutter-text);
+      user-select: none;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      padding: 0 0.75rem 0 0.625rem;
+      min-width: 2.75rem;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .editor-line-code {
+      flex: 1;
+      min-width: 0;
+      padding: 0 1.25rem 0 0.875rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      white-space: pre;
+      tab-size: 2;
+      background: var(--editor-bg);
+    }
+    .editor-line-code.hljs,
+    .editor-line-code .hljs {
+      background: transparent !important;
+      padding: 0;
+    }
+    .editor-statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-shrink: 0;
+      border-top: 1px solid var(--editor-border);
+      background: var(--editor-gutter-bg);
+      padding: 0.35rem 0.875rem;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.6875rem;
+      line-height: 1.2;
+      color: var(--editor-status-text);
+    }
+    .editor-code-wrap {
+      --editor-bg: #282c34;
+      --editor-gutter-bg: #21252b;
+      --editor-gutter-text: #636d83;
+      --editor-border: #181a1f;
+      --editor-status-text: #9da5b4;
+    }
+    .editor-statusbar span {
+      white-space: nowrap;
+    }
+    #editor-pane::-webkit-scrollbar,
+    .editor-lines::-webkit-scrollbar,
+    #editor-image-wrap::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    #editor-pane::-webkit-scrollbar-thumb,
+    .editor-lines::-webkit-scrollbar-thumb,
+    #editor-image-wrap::-webkit-scrollbar-thumb {
+      background: #4b5263;
+      border-radius: 999px;
+      border: 2px solid var(--editor-bg, #282c34);
+    }
+    .editor-lines::-webkit-scrollbar-track {
+      background: var(--editor-bg, #282c34);
+    }
+  </style>
+</head>
+<body class="h-full bg-page text-ink antialiased">
+  <div class="flex h-full min-h-0">
+    <!-- Left: workspace / file explorer -->
+    <aside id="explorer-panel" class="flex shrink-0 flex-col border-r border-slate-200 bg-white">
+      <div class="col-header flex items-center justify-between gap-2 border-b border-slate-200 px-4">
+        <div class="min-w-0">
+          <div class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+            Explorer
+          </div>
+          <h2 id="project-name" class="mt-1 truncate text-sm font-semibold text-ink" title="No project open">No project</h2>
+        </div>
+        <button
+          id="btn-explorer-refresh"
+          type="button"
+          class="explorer-toolbar-btn hidden"
+          aria-label="Refresh file explorer"
+          title="Refresh file explorer"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4 pointer-events-none" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M21 3v6h-6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex min-h-0 flex-1 flex-col px-3 py-3">
+        <button
+          id="btn-open-project"
+          type="button"
+          class="w-full shrink-0 rounded-lg border border-slate-200 bg-page px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-accent hover:text-accent"
+        >
+          Open Project
+        </button>
+
+        <div id="file-explorer-empty" class="mt-4 px-1 text-xs leading-relaxed text-slate-400">
+          Open a folder to browse its files here. The agent shell cwd will match the project root.
+        </div>
+
+        <div id="file-explorer-wrap" class="relative mt-3 hidden min-h-0 flex-1 flex-col">
+          <div
+            id="explorer-view-toggle"
+            class="explorer-view-toggle shrink-0"
+            role="group"
+            aria-label="Explorer view"
+          >
+            <button
+              type="button"
+              class="explorer-view-btn is-active"
+              data-view="all"
+              aria-pressed="true"
+            >
+              All files
+            </button>
+            <button
+              type="button"
+              class="explorer-view-btn"
+              data-view="test"
+              aria-pressed="false"
+            >
+              Test View
+            </button>
+          </div>
+          <div id="file-explorer-loading" class="widget-loading-overlay hidden">
+            <span class="loading-spinner" aria-hidden="true"></span>
+          </div>
+          <div
+            id="file-explorer"
+            class="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 bg-page px-1 py-1"
+            role="tree"
+            aria-label="Project files"
+          ></div>
+        </div>
+      </div>
+
+      <div class="shrink-0 border-t border-slate-200 px-4 py-3">
+        <div class="relative rounded-xl border border-slate-200 bg-page px-3 py-2.5">
+          <div id="cwd-loading" class="widget-loading-overlay">
+            <span class="loading-spinner" aria-hidden="true"></span>
+          </div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Shell cwd</div>
+          <code id="status-cwd" class="mt-1 block break-all font-mono text-[11px] leading-relaxed text-ink">—</code>
+        </div>
+      </div>
+    </aside>
+
+    <div
+      id="resize-explorer"
+      class="panel-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize file explorer"
+      title="Drag to resize explorer"
+    ></div>
+
+    <!-- Center: file editor + conversation -->
+    <div id="workspace-panel" class="flex min-w-0 flex-1">
+      <section id="file-editor" class="flex min-w-0 flex-1 flex-col bg-white">
+        <div class="col-header flex items-center border-b border-slate-200 px-4">
+          <div class="min-w-0">
+            <div class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+              Editor
+            </div>
+            <h2 id="editor-title" class="mt-1 truncate text-sm font-semibold text-ink" title="No file open">
+              No file open
+            </h2>
+          </div>
+        </div>
+        <div id="editor-tabbar-wrap" class="editor-tabbar-wrap hidden">
+          <div id="editor-tabbar" class="editor-tabbar" role="tablist" aria-label="Open files"></div>
+        </div>
+        <div id="editor-pane" class="min-h-0 flex-1 bg-page">
+          <div id="editor-empty" class="flex h-full flex-col items-start justify-center px-6 py-8">
+            <div class="h-1 w-10 rounded-full bg-accent"></div>
+            <p class="mt-3 text-sm font-medium text-ink">No file open</p>
+            <p class="mt-1 max-w-sm text-sm leading-relaxed text-slate-500">
+              Double-click a file in the explorer to view it here.
+            </p>
+          </div>
+          <div id="editor-loading" class="widget-loading-overlay hidden">
+            <span class="loading-spinner loading-spinner-lg" aria-hidden="true"></span>
+            <span class="text-xs text-slate-500">Loading file…</span>
+          </div>
+          <div id="editor-error" class="hidden px-6 py-4 text-sm leading-relaxed text-rose-600" role="alert"></div>
+          <div id="editor-code-wrap" class="editor-code-wrap hidden">
+            <div class="editor-scroll">
+              <div id="editor-lines" class="editor-lines" tabindex="0" aria-label="File contents"></div>
+              <div id="editor-minimap" class="editor-minimap hidden" aria-hidden="true" title="Click or drag to scroll">
+                <div class="editor-minimap-scale">
+                  <div id="editor-minimap-lines" class="editor-minimap-lines"></div>
+                </div>
+                <div id="editor-minimap-viewport" class="editor-minimap-viewport"></div>
+              </div>
+            </div>
+            <div class="editor-statusbar">
+              <span id="editor-status-lines">— lines</span>
+              <span id="editor-status-lang">Plain text</span>
+            </div>
+          </div>
+          <div id="editor-image-wrap" class="hidden h-full overflow-auto bg-slate-950 p-4">
+            <img id="editor-image" class="mx-auto max-w-full rounded-lg border border-slate-700 bg-slate-900 object-contain" alt="" />
+          </div>
+        </div>
+      </section>
+
+      <div
+        id="resize-chat"
+        class="panel-resize-handle"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize chat panel"
+        title="Drag to resize chat"
+      ></div>
+
+      <main id="chat-panel" class="flex shrink-0 flex-col border-l border-slate-200 bg-white">
+      <header class="col-header flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-3">
+        <div class="min-w-0 flex-1">
+          <div class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Local Agent</div>
+          <div class="mt-1 truncate text-sm font-semibold text-ink" id="chat-title">New chat</div>
+        </div>
+        <div class="flex shrink-0 items-center gap-1.5">
+          <span
+            id="status-pill"
+            title="Agent status"
+            class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+          >
+            <span id="status-dot" class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+            <span id="status-text" class="hidden min-[420px]:inline">Ready</span>
+          </span>
+          <span id="log-status" class="hidden max-w-[6rem] truncate text-[11px] text-slate-400 min-[480px]:inline"></span>
+          <button
+            id="btn-open-log"
+            type="button"
+            title="Open chat log"
+            aria-label="Open chat log"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-accent hover:text-accent"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-4 w-4" aria-hidden="true">
+              <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke-linejoin="round" />
+              <path d="M14 3v5h5" stroke-linejoin="round" />
+              <path d="M9 13h6M9 17h4" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="messages" class="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+        <div id="empty-state" class="flex flex-col items-start justify-center pt-12">
+          <div class="h-1 w-12 rounded-full bg-accent"></div>
+          <h2 class="mt-4 text-xl font-semibold tracking-tight text-ink">Start a conversation</h2>
+          <p class="mt-2 text-sm leading-relaxed text-slate-500">
+            Ask the agent to inspect files, search the web, or run shell commands.
+          </p>
+        </div>
+        <div id="message-list" class="hidden space-y-4"></div>
+      </div>
+
+      <footer class="shrink-0 border-t border-slate-200 bg-white px-3 py-3">
+        <form id="chat-form">
+          <div id="composer-wrap">
+            <div id="composer-status" class="composer-status-error hidden mx-2 mt-2" role="alert" aria-live="polite">
+              <span class="composer-status-icon" aria-hidden="true">!</span>
+              <span class="composer-status-text"></span>
+            </div>
+            <div id="attach-chips" class="hidden flex flex-wrap gap-2 px-2 pt-2"></div>
+            <textarea
+              id="composer"
+              rows="2"
+              placeholder="Message…"
+              title="Enter to send · Shift+Enter for newline · paste or drop files to attach"
+              aria-label="Message"
+            ></textarea>
+            <div id="composer-toolbar">
+              <div class="flex items-center gap-0.5">
+                <label
+                  id="btn-attach-image"
+                  for="input-image"
+                  title="Attach image"
+                  aria-label="Attach image"
+                  class="composer-attach-btn"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-4 w-4 pointer-events-none" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <circle cx="8.5" cy="10" r="1.5" />
+                    <path d="m21 15-5.5-5.5L7 18" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </label>
+                <label
+                  id="btn-attach-file"
+                  for="input-file"
+                  title="Attach file"
+                  aria-label="Attach file"
+                  class="composer-attach-btn"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-4 w-4 pointer-events-none" aria-hidden="true">
+                    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" stroke-linejoin="round" />
+                    <path d="M14 3v5h5" stroke-linejoin="round" />
+                    <path d="M9 13h6M9 17h4" stroke-linecap="round" />
+                  </svg>
+                </label>
+                <input
+                  id="input-image"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.avif,image/png,image/jpeg,image/gif,image/webp,image/bmp,image/tiff,image/avif"
+                  class="sr-only"
+                  multiple
+                />
+                <input
+                  id="input-file"
+                  type="file"
+                  accept=".txt,.md,.markdown,.rst,.csv,.tsv,.json,.jsonc,.yaml,.yml,.toml,.xml,.html,.htm,.css,.scss,.sass,.less,.js,.mjs,.cjs,.ts,.tsx,.jsx,.py,.pyi,.rb,.php,.java,.kt,.kts,.go,.rs,.c,.h,.cpp,.cc,.cxx,.hpp,.hxx,.cs,.swift,.m,.mm,.scala,.lua,.r,.R,.pl,.pm,.sh,.bash,.zsh,.ps1,.sql,.vue,.svelte,.dart,.zig,.nim,.proto,.graphql,.gql,.tf,.hcl,.cmake,.mk,.makefile,.dockerfile,.ini,.cfg,.conf,.env,.gitignore,.editorconfig,.properties"
+                  class="sr-only"
+                  multiple
+                />
+                <div id="skills-menu-wrap">
+                  <button
+                    id="btn-skills"
+                    type="button"
+                    title="Use an Agent Skill"
+                    aria-label="Use an Agent Skill"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                    aria-controls="skills-menu"
+                    class="composer-attach-btn"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="h-4 w-4 pointer-events-none" aria-hidden="true">
+                      <path d="M12 3 13.5 8.5 19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3z" stroke-linejoin="round" />
+                      <path d="M5 19h14" stroke-linecap="round" />
+                    </svg>
+                  </button>
+                  <div id="skills-menu" class="hidden" role="menu" aria-label="Agent Skills"></div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button
+                  id="btn-stop"
+                  type="button"
+                  disabled
+                  title="Stop generation"
+                  class="composer-action-btn border disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-50 disabled:text-slate-300 enabled:border-rose-200 enabled:bg-rose-50 enabled:text-rose-700 enabled:hover:bg-rose-100"
+                >
+                  Stop
+                </button>
+                <button
+                  id="btn-send"
+                  type="submit"
+                  title="Send message"
+                  class="composer-action-btn bg-accent text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </footer>
+      </main>
+    </div>
+
+    <!-- Right: context -->
+    <aside class="flex w-64 shrink-0 flex-col border-l border-slate-200 bg-white lg:w-72">
+      <div class="col-header flex items-center border-b border-slate-200 px-4">
+        <div>
+          <div class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">
+            Context
+          </div>
+          <h2 class="mt-1 text-sm font-semibold text-ink">Runtime</h2>
+        </div>
+      </div>
+      <div class="space-y-4 overflow-y-auto px-4 py-4">
+        <div class="relative rounded-xl border border-slate-200 bg-page px-3 py-3">
+          <div id="chats-loading" class="widget-loading-overlay">
+            <span class="loading-spinner" aria-hidden="true"></span>
+          </div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Chats</div>
+          <div id="chats-count" class="mt-0.5 text-[11px] text-slate-500">—</div>
+
+          <div class="mt-2 flex flex-col gap-2">
+            <button
+              id="btn-new-chat"
+              type="button"
+              class="w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
+            >
+              + New chat
+            </button>
+
+            <div id="session-recent" class="px-0.5">
+              <div id="session-recent-loading" class="flex items-center gap-2 px-2 py-3 text-xs text-slate-400">
+                <span class="loading-spinner" aria-hidden="true"></span>
+                <span>Loading chats…</span>
+              </div>
+            </div>
+
+            <button
+              id="chats-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="chats-panel"
+              class="hidden w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left transition hover:bg-slate-50"
+            >
+              <span id="chats-toggle-label" class="text-xs font-medium text-slate-600">Older chats</span>
+              <svg
+                id="chats-chevron"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200"
+                aria-hidden="true"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+            </button>
+
+            <div id="chats-panel" class="hidden flex-col gap-2">
+              <div id="session-list" class="relative min-h-0 max-h-[40vh] overflow-y-auto -mx-1 px-1"></div>
+            </div>
+
+            <div id="chats-actions" class="space-y-2 border-t border-slate-200 pt-2">
+              <div class="flex gap-2">
+                <button
+                  id="btn-delete"
+                  type="button"
+                  class="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 transition hover:border-rose-300 hover:text-rose-700"
+                >
+                  Delete
+                </button>
+                <button
+                  id="btn-clear-all"
+                  type="button"
+                  class="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-medium text-slate-600 transition hover:border-rose-300 hover:text-rose-700"
+                >
+                  Delete all
+                </button>
+              </div>
+              <div id="confirm-delete" class="hidden rounded-lg border border-rose-200 bg-rose-50 p-2.5">
+                <p id="confirm-delete-text" class="text-xs text-rose-800"></p>
+                <div class="mt-2 flex gap-2">
+                  <button id="btn-confirm-delete" type="button" class="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700">Confirm</button>
+                  <button id="btn-cancel-delete" type="button" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">Cancel</button>
+                </div>
+              </div>
+              <div id="confirm-clear" class="hidden rounded-lg border border-rose-200 bg-rose-50 p-2.5">
+                <p class="text-xs text-rose-800">Delete ALL saved chats? This cannot be undone.</p>
+                <div class="mt-2 flex gap-2">
+                  <button id="btn-confirm-clear" type="button" class="rounded bg-rose-600 px-2 py-1 text-xs font-medium text-white hover:bg-rose-700">Yes, delete all</button>
+                  <button id="btn-cancel-clear" type="button" class="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="gpu-meter" class="relative rounded-xl border border-slate-200 bg-page px-3 py-3">
+          <div id="gpu-loading" class="widget-loading-overlay">
+            <span class="loading-spinner loading-spinner-lg" aria-hidden="true"></span>
+            <span class="text-xs text-slate-500">Loading GPU…</span>
+          </div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">GPU</div>
+          <div id="gpu-name" class="mt-1 text-xs font-medium leading-snug text-ink">—</div>
+          <div id="gpu-capacity" class="mt-0.5 font-mono text-[11px] tabular-nums text-slate-500">—</div>
+          <div class="mt-2.5">
+            <div class="flex h-2 overflow-hidden rounded-full bg-slate-200">
+              <div
+                id="gpu-bar-weights"
+                class="h-full bg-teal-700 transition-all duration-500 ease-out"
+                style="width: 0%"
+              ></div>
+              <div
+                id="gpu-bar-context"
+                class="h-full bg-teal-500 transition-all duration-500 ease-out"
+                style="width: 0%"
+              ></div>
+              <div
+                id="gpu-bar-other"
+                class="h-full bg-slate-400 transition-all duration-500 ease-out"
+                style="width: 0%"
+              ></div>
+            </div>
+            <div id="gpu-vram-label" class="mt-1.5 font-mono text-[11px] leading-snug tabular-nums text-slate-500">—</div>
+          </div>
+        </div>
+        <div id="ctx-meter" class="relative flex items-center gap-3 rounded-xl border border-slate-200 bg-page px-3 py-3">
+          <div id="ctx-loading" class="widget-loading-overlay">
+            <span class="loading-spinner loading-spinner-lg" aria-hidden="true"></span>
+            <span class="text-xs text-slate-500">Loading context…</span>
+          </div>
+          <div class="relative h-16 w-16 shrink-0">
+            <svg viewBox="0 0 36 36" class="h-16 w-16 -rotate-90">
+              <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#E2E8F0" stroke-width="3.4" />
+              <circle
+                id="ctx-ring"
+                cx="18" cy="18" r="15.9155"
+                fill="none"
+                stroke="#0D9488"
+                stroke-width="3.4"
+                stroke-linecap="round"
+                stroke-dasharray="100"
+                stroke-dashoffset="100"
+                style="transition: stroke-dashoffset 500ms ease, stroke 300ms ease;"
+              />
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span id="ctx-pct" class="text-sm font-semibold tabular-nums text-ink">—</span>
+            </div>
+          </div>
+          <div class="min-w-0">
+            <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Context</div>
+            <div id="ctx-tokens" class="mt-0.5 font-mono text-xs tabular-nums text-ink">— / —</div>
+            <div id="ctx-sub" class="mt-0.5 text-[11px] leading-snug text-slate-400">tokens used</div>
+          </div>
+        </div>
+        <div class="relative rounded-xl border border-slate-200 bg-page px-3 py-3">
+          <div id="model-loading" class="widget-loading-overlay">
+            <span class="loading-spinner" aria-hidden="true"></span>
+          </div>
+          <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Provider</div>
+          <div id="status-provider" class="mt-1 text-xs font-medium leading-snug text-ink">—</div>
+          <div class="mt-2 text-[11px] font-medium uppercase tracking-wider text-slate-400">Model</div>
+          <code id="status-model" class="mt-1 block break-all font-mono text-xs leading-relaxed text-ink">—</code>
+        </div>
+        <div class="relative rounded-xl border border-slate-200 bg-page px-3 py-3">
+          <div id="tools-loading" class="widget-loading-overlay">
+            <span class="loading-spinner" aria-hidden="true"></span>
+          </div>
+          <button
+            id="tools-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="tools-list"
+            class="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg text-left transition hover:bg-slate-100/60 -mx-1 px-1 py-0.5"
+          >
+            <div class="min-w-0">
+              <div class="text-[11px] font-medium uppercase tracking-wider text-slate-400">Tools</div>
+              <div id="tools-count" class="mt-0.5 text-[11px] text-slate-500">—</div>
+            </div>
+            <svg
+              id="tools-chevron"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              class="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200"
+              aria-hidden="true"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </button>
+          <div id="tools-list" class="mt-2 hidden max-h-[55vh] flex-col gap-1.5 overflow-y-auto"></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div
+    id="project-path-dialog"
+    class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="project-path-title"
+  >
+    <button
+      type="button"
+      id="project-path-backdrop"
+      class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+      aria-label="Close"
+    ></button>
+    <div class="relative z-10 w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
+      <h3 id="project-path-title" class="text-sm font-semibold text-ink">Open project folder</h3>
+      <p class="mt-1 text-xs text-slate-500">Enter the full path to your project directory.</p>
+      <input
+        id="project-path-input"
+        type="text"
+        placeholder="C:\Code\my-project"
+        class="mt-3 w-full rounded-lg border border-slate-200 bg-page px-3 py-2 font-mono text-sm text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+      />
+      <p id="project-path-error" class="mt-2 hidden text-xs text-rose-600"></p>
+      <div class="mt-4 flex justify-end gap-2">
+        <button
+          id="project-path-cancel"
+          type="button"
+          class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+        >
+          Cancel
+        </button>
+        <button
+          id="project-path-confirm"
+          type="button"
+          class="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-hover"
+        >
+          Open
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="image-lightbox"
+    class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Image preview"
+  >
+    <button
+      type="button"
+      id="image-lightbox-backdrop"
+      class="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
+      aria-label="Close preview"
+    ></button>
+    <div class="relative z-10 flex max-h-[92vh] max-w-[92vw] flex-col items-center">
+      <button
+        type="button"
+        id="image-lightbox-close"
+        class="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-lg leading-none text-slate-600 shadow-md transition hover:bg-slate-50"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <img
+        id="image-lightbox-img"
+        class="max-h-[85vh] max-w-[90vw] rounded-lg border border-slate-200 bg-white object-contain shadow-2xl"
+        alt=""
+      />
+      <p id="image-lightbox-caption" class="mt-3 hidden max-w-[90vw] text-center text-sm text-slate-200"></p>
+    </div>
+  </div>
+
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/atom-one-dark.min.css"
+    crossorigin="anonymous"
+  />
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+    crossorigin="anonymous"
+  />
+  <script
+    src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"
+    crossorigin="anonymous"
+  ></script>
+  <script src="/static/app.js?v=46"></script>
+</body>
+</html>

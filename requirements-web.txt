@@ -1,0 +1,5 @@
+# Optional — web_search and fetch_url tools
+-r requirements.txt
+ddgs>=9.0
+beautifulsoup4>=4.12
+trafilatura>=2.0

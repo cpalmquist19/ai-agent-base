@@ -1,0 +1,6 @@
+# Core — required to run the chat UI and LM Studio integration
+openai>=1.0
+fastapi>=0.100
+uvicorn>=0.20
+pydantic>=2.0
+python-dotenv>=1.0
