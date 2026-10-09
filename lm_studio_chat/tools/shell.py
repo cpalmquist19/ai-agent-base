@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import signal
 import subprocess
 import time
 from pathlib import Path
@@ -12,24 +13,47 @@ from lm_studio_chat.config import COMMAND_OUTPUT_LIMIT, allow_unrestricted_paths
 from lm_studio_chat.state import AppState
 
 
+def _signal_group(pgid: int, sig: int) -> None:
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def terminate_process_tree(proc: subprocess.Popen) -> None:
-    """Best-effort kill of a shell command and its children."""
-    if proc.poll() is not None:
-        return
+    """Best-effort kill of a shell command and everything it started."""
     try:
         if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-                capture_output=True,
-                timeout=5,
-                check=False,
-            )
-        else:
-            proc.terminate()
-            try:
-                proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+            if proc.poll() is None:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+            return
+        # POSIX: tool_run_command starts the shell in its own session, so its process
+        # group id is proc.pid. Signal the whole group. Terminating only the shell leaves
+        # its children running with the output pipes still open, and run_command then
+        # blocks until they exit on their own.
+        _signal_group(proc.pid, signal.SIGTERM)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            proc.poll()  # reap the shell so it doesn't count as a live group member
+            if not _group_alive(proc.pid):
+                return
+            time.sleep(0.05)
+        _signal_group(proc.pid, signal.SIGKILL)
     except (OSError, subprocess.TimeoutExpired):
         pass
 
@@ -104,6 +128,7 @@ def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -
             text=True,
             encoding="utf-8",
             errors="replace",
+            start_new_session=(os.name != "nt"),  # own process group, so Stop can kill the whole tree
         )
     except OSError as exc:
         return f"Error launching command: {exc}\nCWD: {state.shell_cwd}"
@@ -127,7 +152,11 @@ def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -
         stdout, stderr = proc.communicate(timeout=5)
     except subprocess.TimeoutExpired:
         terminate_process_tree(proc)
-        stdout, stderr = proc.communicate()
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = "", ""  # an orphan still holds the pipes; don't hang waiting on it
         timed_out = True
     finally:
         with state.active_command_lock:

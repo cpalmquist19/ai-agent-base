@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 import threading
 import time
 
@@ -135,22 +137,52 @@ def test_script_exhaustion_surfaces_as_an_error(make_state):
         drive(state)
 
 
-@pytest.mark.skipif(not hasattr(time, "monotonic"), reason="n/a")
-def test_stop_kills_a_running_shell_command(make_state):
+def _pid_alive(pid: int) -> bool:
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}"], capture_output=True, text=True).stdout
+        return str(pid) in out
+    stat = f"/proc/{pid}/stat"
+    if os.path.exists(stat):
+        with open(stat, encoding="utf-8") as fh:
+            return fh.read().rsplit(")", 1)[1].split()[0] != "Z"  # a zombie is already dead
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def test_stop_kills_the_whole_command_tree_not_just_the_shell(make_state, tmp_path):
+    """Regression: on Linux, stopping killed only the shell; its child kept running and the call hung."""
+    (tmp_path / "sleeper.py").write_text(
+        "import os, time, pathlib\n"
+        "pathlib.Path('child.pid').write_text(str(os.getpid()))\n"
+        "time.sleep(30)\n",
+        encoding="utf-8",
+    )
     state, _ = make_state([])
     finished = threading.Event()
 
     def run():
-        tool_run_command(state, 'python -c "import time; time.sleep(30)"', timeout_seconds=60)
+        tool_run_command(state, "python sleeper.py", timeout_seconds=60)
         finished.set()
 
     worker = threading.Thread(target=run, daemon=True)
     started = time.monotonic()
     worker.start()
-    deadline = started + 10
-    while state.active_command_proc is None and time.monotonic() < deadline:
+
+    pid_file = tmp_path / "child.pid"
+    deadline = started + 15
+    while not (pid_file.exists() and pid_file.read_text(encoding="utf-8").strip()) and time.monotonic() < deadline:
         time.sleep(0.05)
-    assert state.active_command_proc is not None, "command never started"
+    assert pid_file.exists(), "the command never started"
+    child_pid = int(pid_file.read_text(encoding="utf-8"))
+
     kill_active_command(state)
     assert finished.wait(timeout=10), "run_command did not return after the kill"
     assert time.monotonic() - started < 25
+
+    deadline = time.monotonic() + 5
+    while _pid_alive(child_pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert not _pid_alive(child_pid), "the child process is still running after Stop"
