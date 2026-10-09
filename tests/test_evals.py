@@ -36,6 +36,15 @@ def test_tool_selection_allows_extra_calls_between_steps():
     assert tool_selection_score(calls, steps) == 1.0
 
 
+def test_a_step_can_accept_alternative_tools():
+    steps = [{"tool": ["read_file", "search_file"], "args": {"path": r"a\.txt"}}]
+    assert tool_selection_score([tc("search_file", path="a.txt")], steps) == 1.0
+    assert tool_selection_score([tc("read_file", path="a.txt")], steps) == 1.0
+    assert tool_selection_score([tc("list_dir", path="a.txt")], steps) == 0.0
+    with pytest.raises(TaskError):
+        validate_task({"id": "x", "prompt": "p", "expect": {"steps": [{"tool": []}]}})
+
+
 def test_tool_selection_checks_argument_patterns():
     steps = [{"tool": "read_file", "args": {"path": r"config\.py"}}]
     assert tool_selection_score([tc("read_file", path="src/config.py")], steps) == 1.0
@@ -156,6 +165,13 @@ def test_judge_grades_and_includes_source_and_criteria():
     assert "SOURCE TEXT" in prompt and "be accurate" in prompt and "the answer" in prompt
 
 
+def test_judge_can_skip_temperature():
+    client, seen = _stub_client(['{"score": 5, "reasoning": "ok"}'])
+    assert LLMJudge(client, "m", omit_temperature=True).grade(TASK, "a", "s")["score"] == 5
+    assert len(seen) == 1
+    assert "temperature" not in seen[0]
+
+
 def test_judge_retries_without_temperature():
     client, seen = _stub_client(['{"score": 4, "reasoning": "ok"}'], reject_temperature=True)
     assert LLMJudge(client, "m").grade(TASK, "a", "s")["score"] == 4
@@ -178,7 +194,9 @@ def test_all_tasks_load_and_use_real_tools():
     known = {t["function"]["name"] for t in TOOL_SCHEMAS}
     for task in load_tasks():
         for step in task["expect"].get("steps", []):
-            assert step["tool"] in known, f"{task['id']} references unknown tool {step['tool']}"
+            names = step["tool"] if isinstance(step["tool"], list) else [step["tool"]]
+            for name in names:
+                assert name in known, f"{task['id']} references unknown tool {name}"
         for tool in task["expect"].get("forbidden_tools", []):
             assert tool in known
 
@@ -293,6 +311,24 @@ def test_timeout_stops_the_run_and_marks_it_incomplete():
     assert "stopped" in record.answer
 
 
+def test_runs_record_how_often_the_model_needed_a_nudge():
+    from evals.fake import EMPTY, call, say
+    from evals.policies import Policy
+    from evals.runner import RunRecord, run_task
+    from evals.selfcheck import scripted_provider_factory
+
+    task = next(t for t in load_tasks() if t["id"] == "read_and_answer")
+    silent_then_answers = Policy(lambda c: [call("read_file", path="notes.txt"), EMPTY, say("Thursday 02:00 UTC")])
+    record = run_task(task, scripted_provider_factory(silent_then_answers))
+    assert record.passed and record.extra["nudges"] == 1
+    assert _run("read_and_answer", "good").extra["nudges"] == 0
+
+    result = build_result([record, _run("read_and_answer", "good")], {"provider": "p", "model": "m"})
+    assert result["summary"]["mean_nudges"] == 0.5
+    assert "Nudges/run" in render_markdown([result])
+    assert isinstance(record, RunRecord)
+
+
 def test_a_crashing_provider_is_a_failed_run_not_a_crashed_eval(tmp_path):
     from evals.runner import run_task
 
@@ -351,6 +387,40 @@ def test_cli_run_report_and_check_end_to_end(tmp_path, monkeypatch, capsys):
 
     assert cli.main(["report", str(files[0])]) == 0
     assert cli.main(["check", str(files[0]), "--baseline", str(files[0])]) == 0
+
+
+def test_verbose_run_prints_task_tool_calls_and_answer_and_saves_a_full_log(tmp_path, monkeypatch, capsys):
+    import evals.__main__ as cli
+    from evals.fake import ScriptedClient, call, say
+    from lm_studio_chat.providers.base import LLMProvider
+
+    long_answer = "Thursday 02:00 UTC. " + "padding " * 200
+    provider = LLMProvider(
+        id="scripted", label="s", client=ScriptedClient([call("read_file", path="notes.txt"), say(long_answer)]),  # type: ignore[arg-type]
+        model_id="scripted-1", base_url="", stream_usage=False, local=True,
+    )
+    monkeypatch.setattr(cli, "_live_provider", lambda *_: provider)
+
+    assert cli.main(["run", "--tasks", "read_and_answer", "--repeats", "1", "--verbose", "--out", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out
+    assert "Task:   Read notes.txt" in printed
+    assert "1. ok  read_file" in printed and "notes.txt" in printed
+    assert "Answer: Thursday 02:00 UTC." in printed
+    assert "…" in printed  # the on-screen answer is clipped so it stays readable
+
+    log = next(tmp_path.rglob("run_log.txt")).read_text(encoding="utf-8")
+    assert log.count("padding") == 200  # the saved log is not clipped
+
+
+def test_render_run_flags_errors_and_failures():
+    from evals.report import render_run
+
+    rec = RunRecord(
+        "t", 0, False, {}, ["protected canary text was exposed"], None,
+        [{"name": "read_file", "arguments": {"path": "x"}, "ok": False}], 2, "", 1.5,
+    )
+    text = render_run(rec, "do the thing")
+    assert "[FAIL]" in text and "ERR read_file" in text and "(empty)" in text and "! protected canary" in text
 
 
 # ---- the self-check is itself a test ----------------------------------------

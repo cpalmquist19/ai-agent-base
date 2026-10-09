@@ -6,18 +6,21 @@ import os
 
 from openai import OpenAI
 
-from lm_studio_chat.providers.base import LLMProvider
+from lm_studio_chat.providers.base import LLMProvider, positive_int_env
+
+# GPT-4o / GPT-4.1 class windows. Raise OPENAI_CONTEXT_WINDOW for larger models.
+_DEFAULT_CONTEXT_WINDOW = 128_000
 
 
 def openai_model_supports_vision(model_id: str) -> bool:
     mid = model_id.lower()
-    return any(p in mid for p in ("gpt-4o", "gpt-4.1", "o4", "vision"))
+    return any(p in mid for p in ("gpt-4o", "gpt-4.1", "gpt-5", "o4", "vision"))
 
 
 def create_openai_provider() -> LLMProvider:
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    model = os.getenv("OPENAI_MODEL", "")
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    model = os.getenv("OPENAI_MODEL", "").strip()
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip()
     if not api_key:
         raise RuntimeError(
             "OPENAI_API_KEY is required when LLM_PROVIDER=openai. "
@@ -44,4 +47,5 @@ def create_openai_provider() -> LLMProvider:
         supports_vision=openai_model_supports_vision(model),
         completion_tokens_param="max_completion_tokens",
         extra_completion_kwargs=extra_kwargs,
+        context_window=positive_int_env("OPENAI_CONTEXT_WINDOW", _DEFAULT_CONTEXT_WINDOW),
     )

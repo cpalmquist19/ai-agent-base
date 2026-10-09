@@ -22,17 +22,25 @@ def _confine_paths(monkeypatch):
 def make_state(tmp_path):
     """Return ``(state, client)`` for a scripted model and an empty project root."""
 
-    def _make(script=(), *, stream_usage: bool = False, reject_params: tuple[str, ...] = ()):
+    def _make(
+        script=(),
+        *,
+        stream_usage: bool = False,
+        reject_params: tuple[str, ...] = (),
+        **provider_kwargs: Any,
+    ):
         client = ScriptedClient(list(script), reject_params=reject_params)
-        provider = LLMProvider(
-            id="scripted",
-            label="Scripted",
-            client=client,  # type: ignore[arg-type]
-            model_id="scripted",
-            base_url="",
-            stream_usage=stream_usage,
-            local=True,
-        )
+        fields: dict[str, Any] = {
+            "id": "scripted",
+            "label": "Scripted",
+            "client": client,
+            "model_id": "scripted",
+            "base_url": "",
+            "stream_usage": stream_usage,
+            "local": True,
+        }
+        fields.update(provider_kwargs)
+        provider = LLMProvider(**fields)
         state = create_app_state(provider=provider, project_root=tmp_path)
         return state, client
 

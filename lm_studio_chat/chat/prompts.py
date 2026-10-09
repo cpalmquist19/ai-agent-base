@@ -5,6 +5,7 @@ from __future__ import annotations
 from lm_studio_chat.config import SYSTEM_PROMPT, VISION_SYSTEM_PROMPT_BLOCK
 from lm_studio_chat.skills.discovery import discover_skills
 from lm_studio_chat.state import AppState
+from lm_studio_chat.tools.platform_info import environment_note
 
 
 def build_system_prompt(state: AppState) -> str:
@@ -13,6 +14,7 @@ def build_system_prompt(state: AppState) -> str:
         parts.append(VISION_SYSTEM_PROMPT_BLOCK)
     cwd = state.shell_cwd.resolve()
     parts.append(f"\nWorking directory (relative paths resolve here): {cwd}")
+    parts.append(environment_note())
     if state.project_root is not None:
         parts.append(f"Open project root: {state.project_root.resolve()}")
     skills = discover_skills()

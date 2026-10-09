@@ -34,7 +34,13 @@ def _live_provider(provider: str, model: str | None):
         pass
     os.environ["LLM_PROVIDER"] = provider
     if model:
-        os.environ["LM_STUDIO_MODEL" if provider == "lm_studio" else "OPENAI_MODEL"] = model
+        model_env = {
+            "lm_studio": "LM_STUDIO_MODEL",
+            "openai": "OPENAI_MODEL",
+            "anthropic": "ANTHROPIC_MODEL",
+            "unsloth": "UNSLOTH_MODEL",
+        }[provider]
+        os.environ[model_env] = model
     from lm_studio_chat.providers import create_provider
 
     return create_provider()
@@ -51,7 +57,7 @@ def cmd_selfcheck(_: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     from evals.judge import LLMJudge
-    from evals.report import build_result, render_markdown, save_result
+    from evals.report import build_result, render_markdown, render_run, save_result, save_run_log
     from evals.runner import run_task
     from evals.tasks import load_tasks
 
@@ -59,7 +65,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     judge = None
     if args.judge:
         jp = _live_provider(args.judge_provider, args.judge_model) if args.judge_provider else provider
-        judge = LLMJudge(jp.client, jp.model_id)
+        judge = LLMJudge(
+            jp.client, jp.model_id, omit_temperature=jp.omit_temperature
+        )
 
     tasks = load_tasks(args.tasks.split(",") if args.tasks else None)
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -69,6 +77,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     print(f"Running {len(tasks)} task(s) x {args.repeats} on {provider.id}:{provider.model_id}")
     records = []
+    prompts: dict[str, str] = {}
     for task in tasks:
         for repeat in range(args.repeats):
             rec = run_task(
@@ -80,10 +89,16 @@ def cmd_run(args: argparse.Namespace) -> int:
                 trace_dir=trace_dir,
             )
             records.append(rec)
-            mark = "PASS" if rec.passed else "FAIL"
-            print(f"  [{mark}] {task['id']:<22} run {repeat + 1}/{args.repeats}  {rec.duration_s:>6.1f}s  calls={len(rec.tool_calls)}")
-            for failure in rec.failures:
-                print(f"         - {failure}")
+            prompts[task["id"]] = task["prompt"]
+            if args.verbose:
+                print(render_run(rec, task["prompt"]))
+                print()
+            else:
+                mark = "PASS" if rec.passed else "FAIL"
+                print(f"  [{mark}] {task['id']:<22} run {repeat + 1}/{args.repeats}  {rec.duration_s:>6.1f}s  calls={len(rec.tool_calls)}")
+                for failure in rec.failures:
+                    print(f"         - {failure}")
+            save_run_log(records, prompts, trace_dir)  # readable full log, refreshed after every run
 
     meta = {
         "provider": provider.id,
@@ -98,6 +113,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     print()
     print(render_markdown([result]))
     print(f"\nSaved {path}")
+    print(f"Readable log of every run: {trace_dir / 'run_log.txt'}")
     return 0
 
 
@@ -126,14 +142,19 @@ def main(argv: list[str] | None = None) -> int:
         fn=cmd_selfcheck
     )
 
+    _providers = ("lm_studio", "openai", "anthropic", "unsloth")
     run = sub.add_parser("run", help="run the tasks against a real model")
-    run.add_argument("--provider", choices=["lm_studio", "openai"], default="lm_studio")
-    run.add_argument("--model", help="model id (default: whatever LM Studio has loaded / OPENAI_MODEL)")
+    run.add_argument("--provider", choices=_providers, default="lm_studio")
+    run.add_argument(
+        "--model",
+        help="model id (default: loaded LM Studio / Unsloth model, or OPENAI_MODEL / ANTHROPIC_MODEL)",
+    )
     run.add_argument("--tasks", help="comma-separated task ids (default: all)")
     run.add_argument("--repeats", type=int, default=3, help="runs per task; models are non-deterministic")
     run.add_argument("--timeout", type=float, default=180, help="seconds allowed per run")
+    run.add_argument("--verbose", "-v", action="store_true", help="print each run's task, tool calls and answer as it finishes")
     run.add_argument("--judge", action="store_true", help="grade rubric tasks with an LLM judge")
-    run.add_argument("--judge-provider", choices=["lm_studio", "openai"], help="use a different model as judge")
+    run.add_argument("--judge-provider", choices=_providers, help="use a different model as judge")
     run.add_argument("--judge-model")
     run.add_argument("--out", default=str(RESULTS_DIR))
     run.set_defaults(fn=cmd_run)

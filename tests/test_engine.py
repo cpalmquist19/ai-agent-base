@@ -122,6 +122,28 @@ def test_unsupported_stream_options_falls_back_to_a_plain_request(make_state):
     assert "stream_options" not in client.requests[0]["kwargs"]
 
 
+def test_omit_temperature_is_not_sent(make_state):
+    state, client = make_state([say("hi")], omit_temperature=True)
+    final, _ = drive(state)
+    assert final.content == "hi"
+    assert "temperature" not in client.requests[0]["kwargs"]
+
+
+def test_provider_temperature_overrides_the_global_default(make_state):
+    state, client = make_state([say("hi")], temperature=0.2)
+    drive(state)
+    assert client.requests[0]["kwargs"]["temperature"] == 0.2
+
+
+def test_declared_context_window_is_used_for_cloud_providers(make_state):
+    from lm_studio_chat.chat.turns import resolve_context_budget
+
+    state, _ = make_state([], local=False, context_window=200_000)
+    window, budget = resolve_context_budget(state)
+    assert window == 200_000
+    assert budget < window
+
+
 def test_falls_back_to_max_completion_tokens_when_max_tokens_is_rejected(make_state):
     state, client = make_state([say("hi")], reject_params=("max_tokens",))
     final, _ = drive(state)

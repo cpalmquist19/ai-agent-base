@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import os
 
+from lm_studio_chat.providers.anthropic import create_anthropic_provider
 from lm_studio_chat.providers.base import LLMProvider
 from lm_studio_chat.providers.lm_studio import create_lm_studio_provider
 from lm_studio_chat.providers.openai_provider import create_openai_provider
+from lm_studio_chat.providers.unsloth import create_unsloth_provider
 
 _PROVIDERS = {
     "lm_studio": create_lm_studio_provider,
     "openai": create_openai_provider,
+    "anthropic": create_anthropic_provider,
+    "unsloth": create_unsloth_provider,
 }
 
 

@@ -54,7 +54,7 @@ def resolve_context_budget(state: AppState) -> tuple[int, int]:
             state.context_window = window
 
     if window is None:
-        window = 128_000 if state.provider.id == "openai" else 16_384
+        window = state.provider.context_window or 16_384
 
     output_budget = (
         min(MAX_TOKENS, max(1024, int(window * 0.25)))

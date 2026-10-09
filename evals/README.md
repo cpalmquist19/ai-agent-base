@@ -3,7 +3,7 @@
 An evaluation harness for the tool-calling agent in this repo. It answers two different questions:
 
 1. **Does the agent harness still work?** (`pytest`, `python -m evals selfcheck`: no model needed)
-2. **How reliably does a given model use it?** (`python -m evals run`: needs LM Studio or OpenAI)
+2. **How reliably does a given model use it?** (`python -m evals run`: needs LM Studio, OpenAI, or Anthropic)
 
 ## Why this exists
 
@@ -57,6 +57,10 @@ python -m evals run --provider lm_studio --repeats 3
 # OpenAI
 export OPENAI_API_KEY=...    # PowerShell: $env:OPENAI_API_KEY = "..."
 python -m evals run --provider openai --model gpt-4o-mini --repeats 3
+
+# Anthropic / Claude
+export ANTHROPIC_API_KEY=... # PowerShell: $env:ANTHROPIC_API_KEY = "..."
+python -m evals run --provider anthropic --model claude-sonnet-5-5 --repeats 3
 
 # Grade rubric tasks with an LLM judge (ideally a different model than the one being tested)
 python -m evals run --provider lm_studio --judge --judge-provider openai --judge-model gpt-4o-mini

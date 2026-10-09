@@ -46,10 +46,18 @@ def create_completion_stream(
     if state.provider.completion_tokens_param == "max_tokens":
         token_variants.append({"max_completion_tokens": MAX_TOKENS})
 
-    sampling_variants: list[dict[str, Any]] = [
-        {"temperature": TEMPERATURE},
-        {},
-    ]
+    if state.provider.omit_temperature:
+        sampling_variants: list[dict[str, Any]] = [{}]
+    else:
+        temperature = (
+            TEMPERATURE
+            if state.provider.temperature is None
+            else state.provider.temperature
+        )
+        sampling_variants = [
+            {"temperature": temperature},
+            {},
+        ]
     usage_variants: list[dict[str, Any]] = (
         [{"stream_options": {"include_usage": True}}, {}]
         if state.provider.stream_usage

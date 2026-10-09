@@ -9,6 +9,7 @@ from lm_studio_chat.config import (
     INSPECT_PAGE_MAX_CHARS,
     WEB_SEARCH_RESULT_LIMIT,
 )
+from lm_studio_chat.tools.platform_info import shell_syntax
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -41,9 +42,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "search_file",
             "description": (
-                "Search a text file with a regex pattern. Returns matching lines "
-                "with line numbers and nearby context. Use this FIRST to locate "
-                "edit sites instead of reading the whole file or using shell grep."
+                "Search a text file, or every text file under a folder, with a regex "
+                "pattern. For a file: matching lines with line numbers and nearby context. "
+                "For a folder: matches as 'relative/path:line|text'. Use this FIRST to "
+                "locate edit sites instead of reading whole files or using shell grep."
             ),
             "parameters": {
                 "type": "object",
@@ -51,8 +53,8 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "path": {
                         "type": "string",
                         "description": (
-                            "Absolute or relative file path. Relative paths resolve "
-                            "against the open project working directory."
+                            "Absolute or relative path to a file or a folder. Relative "
+                            "paths resolve against the open project working directory."
                         ),
                     },
                     "pattern": {
@@ -198,7 +200,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "run_command",
             "description": (
-                "Run a local shell command (Windows cmd/PowerShell syntax). "
+                f"Run a local shell command ({shell_syntax()}). "
                 "Examples: 'dir', 'cd C:\\\\Code\\\\ai-agent', 'git status'. "
                 "Do NOT use this to search/edit files — use search_file / "
                 "str_replace instead. A bare 'cd <path>' persists for later commands."

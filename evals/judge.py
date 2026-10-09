@@ -51,9 +51,10 @@ def parse_judge_reply(text: str) -> dict[str, Any]:
 
 
 class LLMJudge:
-    def __init__(self, client: Any, model_id: str):
+    def __init__(self, client: Any, model_id: str, *, omit_temperature: bool = False):
         self.client = client
         self.model_id = model_id
+        self.omit_temperature = omit_temperature
 
     def grade(self, task: dict[str, Any], answer: str, material: str) -> dict[str, Any]:
         rubric = task["expect"]["rubric"]
@@ -62,7 +63,11 @@ class LLMJudge:
         )
         messages = [{"role": "user", "content": prompt}]
         last_error = "unknown"
-        for kwargs in ({"temperature": 0}, {}):  # some hosted models reject temperature
+        # Claude 4.7+ rejects temperature below 1; other hosts sometimes reject it entirely.
+        variants: tuple[dict[str, Any], ...] = (
+            ({},) if self.omit_temperature else ({"temperature": 0}, {})
+        )
+        for kwargs in variants:
             try:
                 reply = self.client.chat.completions.create(model=self.model_id, messages=messages, **kwargs)
                 return parse_judge_reply(reply.choices[0].message.content or "")

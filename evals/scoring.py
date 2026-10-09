@@ -50,7 +50,8 @@ def _search(pattern: str, text: str) -> bool:
 
 
 def step_matches(tool_call: ToolCall, step: dict[str, Any]) -> bool:
-    if tool_call.name != step["tool"]:
+    accepted = step["tool"] if isinstance(step["tool"], list) else [step["tool"]]
+    if tool_call.name not in accepted:
         return False
     for key, pattern in step.get("args", {}).items():
         if not _search(pattern, str(tool_call.arguments.get(key, ""))):

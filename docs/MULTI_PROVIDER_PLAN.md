@@ -2,6 +2,8 @@
 
 Goal: keep LM Studio (local) default; add external OpenAI-compatible providers (OpenAI first).
 
+**Update:** `LLM_PROVIDER=anthropic` is supported. Claude is called through Anthropic's OpenAI-compatible endpoint (`https://api.anthropic.com/v1/`), so the chat engine stays on the OpenAI SDK. See `providers/anthropic.py`.
+
 Constraint: minimal diff. OpenAI SDK already abstracts both — no custom HTTP client.
 
 ---
@@ -107,7 +109,7 @@ Extend `/api/status`:
 ### Out of scope v1
 
 - Per-session provider override
-- Anthropic native API (different SDK); could add later as another OpenAI-compatible proxy
+- Anthropic native Messages API (citations, prompt caching, thinking details). Claude chat goes through the OpenAI-compatible endpoint instead
 - Provider picker in UI without restart
 - Renaming package away from `lm_studio_chat`
 

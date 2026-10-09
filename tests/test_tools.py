@@ -70,11 +70,46 @@ def test_search_file_finds_matches_and_reports_misses(state, tmp_path):
     assert tool_search_file(state, "f.txt", "zzz").startswith("No matches")
 
 
-def test_search_file_rejects_directories_and_bad_regex(state, tmp_path):
-    (tmp_path / "d").mkdir()
+def test_search_file_reports_bad_regex_and_missing_paths(state, tmp_path):
     (tmp_path / "f.txt").write_text("x", encoding="utf-8")
-    assert tool_search_file(state, "d", "x").startswith("Error")
     assert tool_search_file(state, "f.txt", "(").startswith("Error: invalid regex")
+    assert tool_search_file(state, "nope", "x").startswith("Error")
+    assert tool_search_file(state, "f.txt", "").startswith("Error: pattern is required")
+
+
+def test_search_file_searches_a_folder_recursively(state, tmp_path):
+    """Regression: models pass a folder to search_file; it used to answer 'is not a file'."""
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "config.py").write_text("MAX_RETRIES = 5\n", encoding="utf-8")
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "log.md").write_text("old: MAX_RETRIES was 3\n", encoding="utf-8")
+    out = tool_search_file(state, ".", "MAX_RETRIES")
+    assert not out.startswith("Error")
+    assert "src/config.py:1|MAX_RETRIES = 5" in out
+    assert "docs/log.md:1|old: MAX_RETRIES was 3" in out
+    assert "2 match(es) in 2 file(s)" in out
+
+
+def test_folder_search_skips_junk_binaries_and_respects_the_match_limit(state, tmp_path):
+    for junk in (".git", "node_modules", "__pycache__", "venv"):
+        (tmp_path / junk).mkdir()
+        (tmp_path / junk / "hit.txt").write_text("needle\n", encoding="utf-8")
+    (tmp_path / "blob.bin").write_bytes(b"needle\x00\x01\x02")
+    (tmp_path / "many.txt").write_text("needle\n" * 10, encoding="utf-8")
+    out = tool_search_file(state, ".", "needle", max_matches=3)
+    assert out.count("many.txt:") == 3
+    assert "stopped at max_matches=3" in out
+    for skipped in (".git", "node_modules", "__pycache__", "venv", "blob.bin"):
+        assert skipped not in out
+
+
+def test_folder_search_with_no_hits_says_so(state, tmp_path):
+    (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
+    assert tool_search_file(state, ".", "zzz").startswith("No matches for /zzz/ in 1 text file(s)")
+
+
+def test_folder_search_is_still_confined_to_the_project(state, tmp_path):
+    assert tool_search_file(state, str(tmp_path.parent), "x").startswith("Error")
 
 
 def test_str_replace_edits_exactly_one_occurrence(state, tmp_path):

@@ -9,7 +9,10 @@
   "expect": {
     "steps": [
       {
-        "tool": "read_file",
+        "tool": [
+          "read_file",
+          "search_file"
+        ],
         "args": {
           "path": "notes\\.txt"
         }

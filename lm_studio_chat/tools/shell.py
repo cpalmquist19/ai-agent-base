@@ -100,6 +100,49 @@ def resolve_cd_target(state: AppState, target: str) -> Path:
     return resolved
 
 
+_WINDOWS_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s\"'|&;<>]*")
+_UNC_PATH = re.compile(r"\\\\[^\s\"'|&;<>]+")
+_HOME_PATH = re.compile(r"(?:(?<=^)|(?<=[\s\"'=]))(~|\$HOME|\$\{HOME\}|%USERPROFILE%|%APPDATA%|%LOCALAPPDATA%|%TEMP%|%TMP%)(?:[\\/][^\s\"'|&;<>]*)?")
+_PARENT_PATH = re.compile(r"(?:(?<=^)|(?<=[\s\"'=]))(\.\.(?:[\\/][^\s\"'|&;<>]*)?)(?=$|[\s\"'|&;<>])")
+_POSIX_ABSOLUTE_PATH = re.compile(r"(?<![\w.~:/\\])/[^\s\"'|&;<>]+")
+# Where programs live. Commands may reference these without being a data-access escape.
+_POSIX_PROGRAM_DIRS = ("/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/", "/opt/", "/dev/null", "/dev/stdout", "/dev/stderr")
+
+
+def command_path_violation(state: AppState, command: str) -> str | None:
+    """Return the first path in ``command`` that points outside the project, or None.
+
+    BEST EFFORT, not a sandbox: it reads the command text only. It stops the common case of
+    a model reading ``C:/elsewhere/file`` or ``/etc/passwd`` through the shell after the file
+    tools refused. It cannot stop a determined command (built paths, encoded strings, scripts).
+    """
+    root = (state.project_root or state.shell_cwd).resolve()
+    candidates: list[str] = []
+    candidates += _WINDOWS_DRIVE_PATH.findall(command)
+    candidates += _UNC_PATH.findall(command)
+    candidates += [m.group(0) for m in _HOME_PATH.finditer(command)]
+    candidates += [m.group(1) for m in _PARENT_PATH.finditer(command)]
+    if os.name != "nt":
+        candidates += [c for c in _POSIX_ABSOLUTE_PATH.findall(command) if not c.startswith(_POSIX_PROGRAM_DIRS)]
+
+    for raw in candidates:
+        token = raw.rstrip(",;)'\"")
+        if token.strip(".") and token.endswith("."):  # sentence punctuation, but never strip ".." itself
+            token = token.rstrip(".")
+        if os.name != "nt":
+            token = token.replace("\\", "/")  # a model may write Windows-style separators; be conservative
+        expanded = Path(os.path.expandvars(token)).expanduser()
+        if not expanded.is_absolute():
+            expanded = state.shell_cwd / expanded
+        try:
+            resolved = expanded.resolve()
+        except (OSError, RuntimeError):
+            return token
+        if not _is_relative_to(resolved, root):
+            return token
+    return None
+
+
 def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -> str:
     """Run a shell command. Plain `cd` updates the persistent working directory."""
     command = command.strip()
@@ -117,6 +160,15 @@ def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -
             return f"Error: '{new_cwd}' is not a directory.\nCWD: {state.shell_cwd}"
         state.shell_cwd = new_cwd
         return f"Changed directory to {state.shell_cwd}"
+
+    if not allow_unrestricted_paths():
+        outside = command_path_violation(state, command)
+        if outside is not None:
+            label = "the open project" if state.project_root is not None else "the working directory"
+            return (
+                f"Error: command refers to a path outside {label}: {outside}. "
+                "Paths outside the project are blocked; run commands on files inside the project."
+            )
 
     try:
         proc = subprocess.Popen(

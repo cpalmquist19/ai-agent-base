@@ -86,6 +86,15 @@ def extract_tool_calls(messages: list[dict[str, Any]]) -> list[ToolCall]:
     return calls
 
 
+def count_nudges(messages: list[dict[str, Any]]) -> int:
+    """Times the engine had to prompt a model that stopped without a tool call or an answer."""
+    return sum(
+        1
+        for m in messages
+        if m.get("role") == "user" and str(m.get("content", "")).startswith("You stopped without")
+    )
+
+
 def run_task(
     task: dict[str, Any],
     provider_factory: ProviderFactory,
@@ -173,4 +182,5 @@ def run_task(
         duration_s=round(time.monotonic() - started, 3),
         error=error,
         trace_path=trace_path,
+        extra={"nudges": count_nudges(messages)},
     )

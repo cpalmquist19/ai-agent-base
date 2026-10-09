@@ -1,4 +1,4 @@
-"""LLM provider backends (local LM Studio, OpenAI, etc.)."""
+"""LLM provider backends (LM Studio, OpenAI, Anthropic, Unsloth)."""
 
 from lm_studio_chat.providers.base import LLMProvider
 from lm_studio_chat.providers.factory import create_provider

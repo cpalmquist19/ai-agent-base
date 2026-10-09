@@ -11,9 +11,12 @@
   "expect": {
     "steps": [
       {
-        "tool": "read_file",
+        "tool": [
+          "read_file",
+          "search_file"
+        ],
         "args": {
-          "path": "config\\.py"
+          "path": "config\\.py|^\\.$|^\\.?/?src/?$"
         }
       }
     ],

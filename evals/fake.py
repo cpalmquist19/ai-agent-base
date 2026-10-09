@@ -107,6 +107,6 @@ class ScriptedClient:
             raise ScriptExhausted(
                 f"model was called a {len(self.requests) + 1}th time but the script has no more steps"
             )
-        self.requests.append({"kwargs": sorted(kwargs), "n_messages": len(kwargs["messages"])})
+        self.requests.append({"kwargs": dict(kwargs), "n_messages": len(kwargs["messages"])})
         step = self._script.pop(0)
         return _chunks_for(step, len(self.requests))

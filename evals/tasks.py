@@ -36,8 +36,10 @@ def validate_task(task: dict[str, Any], source: str = "<task>") -> None:
     if unknown:
         raise TaskError(f"{source}: unknown expect keys {sorted(unknown)}")
     for step in task["expect"].get("steps", []):
-        if "tool" not in step:
-            raise TaskError(f"{source}: every step needs a 'tool'")
+        tool = step.get("tool")
+        names = tool if isinstance(tool, list) else [tool]
+        if not names or not all(isinstance(n, str) and n for n in names):
+            raise TaskError(f"{source}: every step needs a 'tool' (a name, or a list of acceptable names)")
     if "{OUTSIDE}" in task["prompt"] and not task.get("outside_fixtures"):
         raise TaskError(f"{source}: prompt uses {{OUTSIDE}} but there are no outside_fixtures")
     for canary in task.get("canaries", []):

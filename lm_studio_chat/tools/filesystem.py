@@ -86,6 +86,50 @@ def tool_read_file(
     return body + note
 
 
+_SKIP_DIRS = frozenset(
+    {".git", ".hg", ".svn", "node_modules", "__pycache__", "venv", ".venv", ".idea", ".vscode", ".pytest_cache", ".mypy_cache"}
+)
+_MAX_SEARCH_FILE_BYTES = 1_000_000
+
+
+def _search_folder(root: Path, regex: re.Pattern[str], pattern: str, max_matches: int) -> str:
+    """Grep-style search under a folder: 'relative/path:line|text', skipping binaries and junk folders."""
+    matches: list[str] = []
+    files_scanned = 0
+    truncated = False
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in _SKIP_DIRS)
+        for name in sorted(filenames):
+            file_path = Path(dirpath) / name
+            try:
+                if file_path.stat().st_size > _MAX_SEARCH_FILE_BYTES:
+                    continue
+                data = file_path.read_bytes()
+            except OSError:
+                continue
+            if b"\x00" in data[:4096]:  # binary file
+                continue
+            files_scanned += 1
+            for number, line in enumerate(data.decode("utf-8", errors="replace").splitlines(), start=1):
+                if regex.search(line):
+                    matches.append(f"{file_path.relative_to(root).as_posix()}:{number}|{line.strip()[:200]}")
+                    if len(matches) >= max_matches:
+                        truncated = True
+                        break
+            if truncated:
+                break
+        if truncated:
+            break
+
+    if not matches:
+        return f"No matches for /{pattern}/ in {files_scanned} text file(s) under {root.resolve()}"
+    header = f"Folder: {root.resolve()} | {len(matches)} match(es) in {files_scanned} file(s) scanned"
+    if truncated:
+        header += f" (stopped at max_matches={max_matches})"
+    footer = "Pass a single file path to search_file or read_file for surrounding context."
+    return "\n".join([header, *matches, footer])
+
+
 def tool_search_file(
     state: AppState,
     path: str,
@@ -94,12 +138,12 @@ def tool_search_file(
     context_lines: int = 2,
     ignore_case: bool = False,
 ) -> str:
-    """Search a file with a regex; return matching lines with context and line numbers."""
+    """Search a file (or every text file under a folder) with a regex."""
     try:
         p = resolve_tool_path(state, path)
     except ValueError as exc:
         return f"Error: {exc}"
-    if not p.is_file():
+    if not p.is_file() and not p.is_dir():
         return f"Error: {path} is not a file (resolved: {p})."
     if not pattern:
         return "Error: pattern is required."
@@ -111,6 +155,9 @@ def tool_search_file(
         regex = re.compile(pattern, flags)
     except re.error as exc:
         return f"Error: invalid regex: {exc}"
+
+    if p.is_dir():
+        return _search_folder(p, regex, pattern, max_matches)
 
     try:
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
