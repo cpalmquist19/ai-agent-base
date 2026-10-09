@@ -9,6 +9,11 @@ from openai import OpenAI
 from lm_studio_chat.providers.base import LLMProvider
 
 
+def openai_model_supports_vision(model_id: str) -> bool:
+    mid = model_id.lower()
+    return any(p in mid for p in ("gpt-4o", "gpt-4.1", "o4", "vision"))
+
+
 def create_openai_provider() -> LLMProvider:
     api_key = os.getenv("OPENAI_API_KEY", "")
     model = os.getenv("OPENAI_MODEL", "")
@@ -36,6 +41,7 @@ def create_openai_provider() -> LLMProvider:
         base_url=base_url,
         stream_usage=True,
         local=False,
+        supports_vision=openai_model_supports_vision(model),
         completion_tokens_param="max_completion_tokens",
         extra_completion_kwargs=extra_kwargs,
     )

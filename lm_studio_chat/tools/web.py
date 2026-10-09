@@ -33,6 +33,15 @@ def import_ddgs():
         ) from exc
 
 
+def web_search_available() -> tuple[bool, str | None]:
+    """Check if web_search dependencies are installed."""
+    try:
+        import_ddgs()
+        return True, None
+    except ImportError:
+        return False, "Requires ddgs package (pip install ddgs)"
+
+
 def tool_web_search(
     query: str,
     max_results: int = 5,

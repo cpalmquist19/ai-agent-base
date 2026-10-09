@@ -8,7 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from lm_studio_chat.config import COMMAND_OUTPUT_LIMIT
+from lm_studio_chat.config import COMMAND_OUTPUT_LIMIT, allow_unrestricted_paths
 from lm_studio_chat.state import AppState
 
 
@@ -41,14 +41,39 @@ def kill_active_command(state: AppState) -> None:
         terminate_process_tree(proc)
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        try:
+            Path(str(path.resolve()).lower()).relative_to(
+                Path(str(root.resolve()).lower())
+            )
+            return True
+        except ValueError:
+            return False
+
+
 def resolve_cd_target(state: AppState, target: str) -> Path:
     target = target.strip().strip('"').strip("'")
     if not target or target == "~":
-        return Path.home()
+        if not allow_unrestricted_paths():
+            if state.project_root is not None:
+                return state.project_root.resolve()
+        return Path.home().resolve()
     expanded = Path(os.path.expandvars(target)).expanduser()
     if not expanded.is_absolute():
         expanded = state.shell_cwd / expanded
-    return expanded.resolve()
+    resolved = expanded.resolve()
+
+    if not allow_unrestricted_paths():
+        sandbox_root = (state.project_root or state.shell_cwd).resolve()
+        if not _is_relative_to(resolved, sandbox_root):
+            target_label = "the open project" if state.project_root is not None else "the working directory"
+            raise ValueError(f"target directory is outside {target_label}: {target} (resolved: {resolved})")
+
+    return resolved
 
 
 def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -> str:
@@ -62,7 +87,7 @@ def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -
         target = (cd_match.group(1) or "").strip()
         try:
             new_cwd = resolve_cd_target(state, target)
-        except OSError as exc:
+        except (OSError, ValueError) as exc:
             return f"Error resolving path: {exc}"
         if not new_cwd.is_dir():
             return f"Error: '{new_cwd}' is not a directory.\nCWD: {state.shell_cwd}"

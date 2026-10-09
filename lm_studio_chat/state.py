@@ -30,6 +30,7 @@ class AppState:
     cancel: threading.Event
     session_usage: dict[str, dict[str, Any]]
     sessions_lock: threading.Lock
+    context_window: int | None = None
     active_command_lock: threading.Lock = field(default_factory=threading.Lock)
     active_command_proc: subprocess.Popen[str] | None = None
     active_llm_stream_lock: threading.Lock = field(default_factory=threading.Lock)

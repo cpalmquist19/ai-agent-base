@@ -289,11 +289,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "function": {
             "name": "inspect_page",
             "description": (
-                "Render a URL in headless Chromium and capture the accessibility "
-                "tree (Playwright aria_snapshot) for test automation and Page "
-                "Object generation. Waits up to 20s for interactive elements "
-                "before snapshotting. Prefer scope='form' for login pages or "
-                "scope='main' to reduce noise."
+                "Render a URL in Chromium (headless by default, headed when "
+                "configured) and capture the accessibility tree (Playwright aria_snapshot) "
+                "for test automation and Page Object generation. Waits up to 20s for "
+                "interactive elements before snapshotting. Prefer scope='form' for login "
+                "pages or scope='main' to reduce noise."
             ),
             "parameters": {
                 "type": "object",

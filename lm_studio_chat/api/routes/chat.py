@@ -68,6 +68,7 @@ def create_chat_router(state: AppState) -> APIRouter:
                 raw_message,
                 stored,
                 skill=skill_name,
+                supports_vision=getattr(state.provider, "supports_vision", False),
             )
             if session.get("title") in (None, "", "New chat"):
                 session["title"] = session_title(

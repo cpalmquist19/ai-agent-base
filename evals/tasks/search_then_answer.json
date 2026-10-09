@@ -1,0 +1,28 @@
+{
+  "id": "search_then_answer",
+  "category": "retrieval",
+  "description": "Locate the defining file among several and read the current value, ignoring a stale value in a changelog.",
+  "prompt": "Which file defines MAX_RETRIES, and what value is it set to now? Answer with the file name and the value.",
+  "fixtures": {
+    "src/retry.py": "from config import MAX_RETRIES\n\n\ndef attempts():\n    return MAX_RETRIES\n",
+    "src/config.py": "MAX_RETRIES = 5\nTIMEOUT = 30\n",
+    "docs/changelog.md": "v1: MAX_RETRIES was 3.\nv2: raised it.\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": "read_file",
+        "args": {
+          "path": "config\\.py"
+        }
+      }
+    ],
+    "answer": {
+      "all_regex": [
+        "config\\.py",
+        "\\b5\\b"
+      ]
+    },
+    "max_tool_calls": 8
+  }
+}

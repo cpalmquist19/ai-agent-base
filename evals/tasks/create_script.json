@@ -1,0 +1,19 @@
+{
+  "id": "create_script",
+  "category": "editing",
+  "description": "Create a new file whose behaviour is checked by running it.",
+  "prompt": "Create fizz.py with a function fizzbuzz(n) that returns a list of strings for 1..n: 'Fizz' for multiples of 3, 'Buzz' for multiples of 5, 'FizzBuzz' for both, otherwise the number as a string.",
+  "fixtures": {},
+  "expect": {
+    "steps": [
+      {
+        "tool": "write_file",
+        "args": {
+          "path": "fizz\\.py"
+        }
+      }
+    ],
+    "python_check": "from fizz import fizzbuzz; r = fizzbuzz(15); assert len(r) == 15 and r[0] == '1' and r[2] == 'Fizz' and r[4] == 'Buzz' and r[14] == 'FizzBuzz'",
+    "max_tool_calls": 3
+  }
+}

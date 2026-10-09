@@ -183,6 +183,38 @@ def loaded_model_details(model_id: str | None) -> dict[str, Any] | None:
     return chosen
 
 
+def model_supports_vision(model_id: str | None) -> bool:
+    """Return True if the LM Studio model exposes vision/multimodal capabilities."""
+    try:
+        models = fetch_v1_models()
+        if models:
+            for entry in models:
+                if not isinstance(entry, dict):
+                    continue
+                key = entry.get("key")
+                instances = entry.get("loaded_instances") or []
+                match = False
+                if model_id and (key == model_id or any(isinstance(i, dict) and i.get("id") == model_id for i in instances)):
+                    match = True
+                elif not model_id and instances:
+                    match = True
+                if match:
+                    model_type = str(entry.get("type", "")).lower()
+                    if any(t in model_type for t in ("vlm", "vision", "multimodal")):
+                        return True
+                    caps = entry.get("capabilities")
+                    if isinstance(caps, list) and any("vision" in str(c).lower() for c in caps):
+                        return True
+                    if isinstance(caps, dict) and (caps.get("vision") or caps.get("multimodal")):
+                        return True
+                    arch = entry.get("architecture")
+                    if isinstance(arch, dict) and "vision" in str(arch.get("modality", "")).lower():
+                        return True
+    except Exception:
+        pass
+    return False
+
+
 def parse_lms_vram_estimate(text: str) -> int | None:
     """Parse `Estimated GPU Memory: 9.63 GiB` from lms CLI output."""
     match = re.search(

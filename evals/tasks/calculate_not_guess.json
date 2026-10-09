@@ -1,0 +1,20 @@
+{
+  "id": "calculate_not_guess",
+  "category": "tool_use",
+  "description": "Use the calculator for arithmetic instead of estimating.",
+  "prompt": "Use the calculator tool to work out 17.5% of 2480 and tell me the result.",
+  "fixtures": {},
+  "expect": {
+    "steps": [
+      {
+        "tool": "calculate"
+      }
+    ],
+    "answer": {
+      "all_regex": [
+        "434"
+      ]
+    },
+    "max_tool_calls": 2
+  }
+}

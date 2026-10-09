@@ -6,18 +6,44 @@ import os
 import re
 from pathlib import Path
 
+from lm_studio_chat.config import allow_unrestricted_paths
 from lm_studio_chat.state import AppState
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        try:
+            Path(str(path.resolve()).lower()).relative_to(
+                Path(str(root.resolve()).lower())
+            )
+            return True
+        except ValueError:
+            return False
+
+
 def resolve_tool_path(state: AppState, path: str) -> Path:
-    """Resolve a file/dir path for tool I/O against the persistent shell cwd."""
+    """Resolve a file/dir path for tool I/O, confined to the project root (or shell cwd) by default."""
     raw = path.strip()
     if not raw:
         raise ValueError("empty path")
     expanded = Path(os.path.expandvars(raw)).expanduser()
     if not expanded.is_absolute():
-        expanded = state.shell_cwd / expanded
-    return expanded.resolve()
+        base = state.project_root if state.project_root is not None else state.shell_cwd
+        expanded = base / expanded
+    resolved = expanded.resolve()
+
+    if allow_unrestricted_paths():
+        return resolved
+
+    root = (state.project_root or state.shell_cwd).resolve()
+    if not _is_relative_to(resolved, root):
+        target_label = "the open project" if state.project_root is not None else "the working directory"
+        raise ValueError(f"path is outside {target_label}: {raw} (resolved: {resolved})")
+
+    return resolved
 
 
 def tool_read_file(

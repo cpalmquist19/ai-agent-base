@@ -1,0 +1,26 @@
+{
+  "id": "read_and_answer",
+  "category": "retrieval",
+  "description": "Read one file and answer from it instead of guessing.",
+  "prompt": "Read notes.txt and tell me when the deploy window is.",
+  "fixtures": {
+    "notes.txt": "Release notes\nDeploy window: Thursday 02:00 UTC\nRollback owner: Dana\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": "read_file",
+        "args": {
+          "path": "notes\\.txt"
+        }
+      }
+    ],
+    "answer": {
+      "all_regex": [
+        "Thursday",
+        "02:00"
+      ]
+    },
+    "max_tool_calls": 3
+  }
+}

@@ -263,6 +263,7 @@
     ctx: { used: null, window: null, max: null },
     gpuLoaded: false,
     localProvider: true,
+    supportsVision: false,
     toolsExpanded: false,
     chatsExpanded: false,
     autoScrollMessages: true,
@@ -634,7 +635,11 @@
 
   function shouldRefreshExplorerForToolEvents(toolEvents) {
     if (!toolEvents?.length) return false;
-    return toolEvents.some((ev) => ev.ok !== false && ev.name === "write_file");
+    return toolEvents.some(
+      (ev) =>
+        ev.ok !== false &&
+        (ev.name === "write_file" || ev.name === "str_replace" || ev.name === "run_command")
+    );
   }
 
   async function loadExplorerRoot() {
@@ -1732,7 +1737,11 @@
   }
 
   function findEditorTab(path) {
-    return state.editorTabs.find((tab) => tab.path === path) || null;
+    if (!path) return null;
+    const direct = state.editorTabs.find((tab) => tab.path === path);
+    if (direct) return direct;
+    const lower = path.toLowerCase();
+    return state.editorTabs.find((tab) => tab.path.toLowerCase() === lower) || null;
   }
 
   function clearEditorTabs() {
@@ -2102,8 +2111,22 @@
     }
   }
 
-  async function openEditorFile(relativePath) {
-    const rel = String(relativePath || "").replace(/\\/g, "/").trim();
+  function normalizeRelativePath(rawPath) {
+    if (!rawPath) return "";
+    let p = String(rawPath).replace(/\\/g, "/").trim();
+    p = p.replace(/^\.\//, "");
+    if (state.project?.root) {
+      let root = String(state.project.root).replace(/\\/g, "/").trim();
+      if (root.endsWith("/")) root = root.slice(0, -1);
+      if (p.toLowerCase().startsWith(root.toLowerCase() + "/")) {
+        p = p.slice(root.length + 1);
+      }
+    }
+    return p.replace(/^\/+/, "");
+  }
+
+  async function openEditorFile(relativePath, options = {}) {
+    const rel = normalizeRelativePath(relativePath);
     if (!rel) return;
     if (!state.project) {
       showEditorError("Open a project to view files.");
@@ -2112,9 +2135,8 @@
 
     const name = rel.split("/").pop() || rel;
     const existing = findEditorTab(rel);
-    if (existing) {
-      activateEditorTab(rel);
-      return;
+    if (existing && !options.reload) {
+      activateEditorTab(existing.path);
     }
 
     const kind = projectFileKind(name);
@@ -2123,15 +2145,29 @@
       return;
     }
 
-    hideEditorViews();
-    setEditorLoading(true);
+    if (!existing) {
+      hideEditorViews();
+      setEditorLoading(true);
+    }
 
     try {
       if (kind === "image") {
         const res = await fetchProjectFile(rel);
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
-        addEditorImageTab(rel, name, objectUrl);
+        if (existing) {
+          revokeEditorTabImage(existing);
+          existing.imageUrl = objectUrl;
+          existing.name = name;
+          existing.kind = "image";
+          if (!options.keepActive || state.editorActivePath === existing.path) {
+            activateEditorTab(existing.path);
+          } else {
+            renderEditorTabs();
+          }
+        } else {
+          addEditorImageTab(rel, name, objectUrl);
+        }
         return;
       }
 
@@ -2141,11 +2177,49 @@
         throw new Error(`File too large to open (max ${MAX_TEXT_BYTES / 1024} KB).`);
       }
       const text = await blob.text();
-      addEditorTextTab(rel, name, text);
+      if (existing) {
+        existing.content = text;
+        existing.name = name;
+        existing.kind = "text";
+        if (!options.keepActive || state.editorActivePath === existing.path) {
+          activateEditorTab(existing.path);
+        } else {
+          renderEditorTabs();
+        }
+      } else {
+        addEditorTextTab(rel, name, text);
+      }
     } catch (err) {
-      showEditorError(err.message || String(err));
+      if (!options.keepActive || state.editorActivePath === rel || (existing && state.editorActivePath === existing.path)) {
+        showEditorError(err.message || String(err));
+      }
     } finally {
-      setEditorLoading(false);
+      if (!existing) {
+        setEditorLoading(false);
+      }
+    }
+  }
+
+  async function reloadEditorTabsForToolEvents(toolEvents) {
+    if (!toolEvents?.length || !state.project || !state.editorTabs.length) return;
+    const pathsToReload = new Set();
+    for (const ev of toolEvents) {
+      if (ev.ok === false) continue;
+      if (ev.name === "write_file" || ev.name === "str_replace") {
+        const rawPath = ev.arguments?.path;
+        if (rawPath) {
+          const norm = normalizeRelativePath(rawPath);
+          if (norm) pathsToReload.add(norm);
+        }
+      }
+    }
+    if (!pathsToReload.size) return;
+
+    for (const relPath of pathsToReload) {
+      const tab = findEditorTab(relPath);
+      if (tab) {
+        await openEditorFile(tab.path, { reload: true, keepActive: true });
+      }
     }
   }
 
@@ -2295,6 +2369,14 @@
       chip.appendChild(remove);
       chips.appendChild(chip);
     });
+
+    if (state.supportsVision === false && state.attachments.some((a) => a.kind === "image")) {
+      const hint = document.createElement("div");
+      hint.className =
+        "inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs text-amber-800";
+      hint.textContent = "Model does not support vision; images will be attached as text references.";
+      chips.appendChild(hint);
+    }
   }
 
   function clearAttachments() {
@@ -3490,6 +3572,7 @@
 
   function applyBasicStatus(data) {
     state.localProvider = data.local !== false;
+    state.supportsVision = Boolean(data.supports_vision);
     if (els.statusProvider) {
       els.statusProvider.textContent = data.provider_label || data.provider || "—";
     }
@@ -3503,20 +3586,46 @@
     }
     const tools = data.tools || [];
     selectSkillFromCatalog(data.skills || []);
+    const availableCount = tools.filter((t) => t.available !== false).length;
     if (els.toolsCount) {
-      els.toolsCount.textContent =
-        tools.length === 1 ? "1 tool available" : `${tools.length} tools available`;
+      if (availableCount === tools.length) {
+        els.toolsCount.textContent =
+          tools.length === 1 ? "1 tool available" : `${tools.length} tools available`;
+      } else {
+        els.toolsCount.textContent = `${availableCount} of ${tools.length} tools available`;
+      }
     }
     els.toolsList.innerHTML = "";
     for (const tool of tools) {
+      const isAvailable = tool.available !== false;
       const chip = document.createElement("div");
-      chip.className = "rounded-lg border border-slate-200 bg-page px-2.5 py-2";
-      chip.innerHTML = `
-        <div class="font-mono text-xs font-medium text-ink">${escapeHtml(tool.name)}</div>
-        <div class="mt-0.5 text-[11px] leading-snug text-slate-500">${escapeHtml(
-          (tool.description || "").split(".")[0] + (tool.description ? "." : "")
-        )}</div>
-      `;
+      if (isAvailable) {
+        chip.className = "rounded-lg border border-slate-200 bg-page px-2.5 py-2";
+        chip.innerHTML = `
+          <div class="font-mono text-xs font-medium text-ink">${escapeHtml(tool.name)}</div>
+          <div class="mt-0.5 text-[11px] leading-snug text-slate-500">${escapeHtml(
+            (tool.description || "").split(".")[0] + (tool.description ? "." : "")
+          )}</div>
+        `;
+      } else {
+        chip.className = "rounded-lg border border-slate-200 bg-page px-2.5 py-2 opacity-60";
+        chip.innerHTML = `
+          <div class="flex items-center justify-between gap-1">
+            <span class="font-mono text-xs font-medium text-slate-600">${escapeHtml(tool.name)}</span>
+            <span class="text-[10px] uppercase font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1">Unavailable</span>
+          </div>
+          <div class="mt-0.5 text-[11px] leading-snug text-slate-400">${escapeHtml(
+            (tool.description || "").split(".")[0] + (tool.description ? "." : "")
+          )}</div>
+          ${
+            tool.unavailable_reason
+              ? `<div class="mt-1 text-[10px] text-amber-800 leading-tight">${escapeHtml(
+                  tool.unavailable_reason
+                )}</div>`
+              : ""
+          }
+        `;
+      }
       els.toolsList.appendChild(chip);
     }
   }
@@ -3833,13 +3942,17 @@
       state.messages = payload.messages;
       syncMessages();
       if (
-        payload.type === "done" &&
-        state.project &&
-        shouldRefreshExplorerForToolEvents(
-          payload.messages[payload.messages.length - 1]?.tool_events
-        )
+        (payload.type === "done" || payload.type === "error") &&
+        state.project
       ) {
-        refreshExplorer().catch(() => {});
+        const lastMsg = payload.messages[payload.messages.length - 1];
+        const toolEvents = lastMsg?.tool_events;
+        if (toolEvents?.length) {
+          if (shouldRefreshExplorerForToolEvents(toolEvents)) {
+            refreshExplorer().catch(() => {});
+          }
+          reloadEditorTabsForToolEvents(toolEvents).catch(() => {});
+        }
       }
     }
     if (payload.sessions) {

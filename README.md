@@ -12,7 +12,7 @@ Stream chat responses, cancel in-flight generations, and let the model use tools
 - Streaming chat with stop/cancel support
 - Tool calling with a multi-round loop (read/write files, shell, web, skills)
 - Project folder explorer with drag-and-drop attachments
-- Vision-capable models: image attachments in chat
+- Image attachments (when the loaded model supports vision)
 - Agent Skills: reusable task procedures in `skills/*/SKILL.md`
 - Auto-detects the model loaded in LM Studio
 - Binds to `127.0.0.1` by default — local use only
@@ -25,8 +25,8 @@ Stream chat responses, cancel in-flight generations, and let the model use tools
 ## Quick start
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/lm-studio-chat.git
-cd lm-studio-chat
+git clone https://github.com/cpalmquist19/ai-agent-base.git
+cd ai-agent-base
 
 python -m venv venv
 # Windows
@@ -36,10 +36,10 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
-# Optional: web search + URL fetch
+# Optional: web search (UI lists web_search as unavailable until installed)
 pip install -r requirements-web.txt
 
-# Optional: browser page inspection
+# Optional: browser page inspection (UI lists inspect_page as unavailable until installed)
 pip install -r requirements-browser.txt
 playwright install chromium
 
@@ -68,6 +68,7 @@ Set environment variables in `.env` (loaded automatically) or export them before
 | `LM_STUDIO_CHAT_PORT` | `7860` | UI port |
 | `LM_STUDIO_SKILLS_DIRS` | — | Extra skill directories (`;` on Windows, `:` on Unix) |
 | `LM_STUDIO_INSPECT_PAGE_HEADED` | — | Set `1`/`true` to show Playwright browser window |
+| `LM_STUDIO_ALLOW_UNRESTRICTED_PATHS` | — | Set `1`/`true` to disable project path confinement for file tools and `cd` |
 
 Session logs are written to `~/.lm_studio_chat_logs/chat_<session_id>.log`.
 
@@ -98,7 +99,8 @@ Each skill needs at least `name` and `description` in frontmatter. The model can
 
 **This is a local development agent with real power.**
 
-- The model can run **shell commands** and **read/write files** on your machine (within the working directory / project you open).
+- **File tools are project-scoped by default:** `read_file`, `write_file`, `str_replace`, `search_file`, and `list_dir` are restricted to the open project (or initial working directory). Attempts to access paths outside the sandbox are rejected. To disable this restriction, set `LM_STUDIO_ALLOW_UNRESTRICTED_PATHS=1`.
+- **Shell commands (`run_command`) are not fully sandboxed:** while bare `cd` is constrained to the sandbox, arbitrary shell commands execute with the permissions of the running process. Treat shell execution with appropriate caution.
 - The server has **no authentication**. Keep `LM_STUDIO_CHAT_HOST=127.0.0.1` — do **not** expose it to the network.
 - Do not run against untrusted prompts on a machine with sensitive data unless you understand the risk.
 - With `LLM_PROVIDER=openai`, chat content is sent to OpenAI; local tools still execute on your machine.

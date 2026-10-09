@@ -39,6 +39,12 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "")
 MAX_TOKENS = int(os.getenv("LM_STUDIO_MAX_TOKENS", "32768"))
 TEMPERATURE = float(os.getenv("LM_STUDIO_TEMPERATURE", "0.3"))
 
+def allow_unrestricted_paths() -> bool:
+    """Return True if path sandboxing is disabled via environment variable."""
+    val = os.getenv("LM_STUDIO_ALLOW_UNRESTRICTED_PATHS", "").strip().lower()
+    return val in ("1", "true", "yes")
+
+
 SYSTEM_PROMPT = (
     "You are a local coding assistant with tools. Tool rounds are limited — be efficient.\n"
     "\n"
@@ -67,8 +73,8 @@ SYSTEM_PROMPT = (
     "3) str_replace with old_string copied EXACTLY from the read (same indentation "
     "and whitespace). Prefer str_replace for existing files; write_file only for "
     "new files or full rewrites.\n"
-    "4) Paths: relative paths resolve against the working directory shown below. "
-    "For project files, prefer absolute paths under the open project root. "
+    "4) Paths: relative paths resolve under the open project root (or working directory). "
+    "Paths outside the open project are rejected unless unrestricted paths are enabled. "
     "When confirming a change, always cite the full resolved path from the tool "
     "result (not just the relative path you passed in).\n"
     "5) If str_replace fails, search/read again — do not revert a successful edit "
@@ -82,7 +88,18 @@ SYSTEM_PROMPT = (
     "web_search when you need to find pages. "
     "Answer directly when tools are not needed.\n"
     "\n"
-    "Chat attachments (you CAN see images):\n"
+    "Agent Skills:\n"
+    "- Reusable task procedures are listed at the end of this prompt (name + "
+    "description only).\n"
+    "- Call list_skills() to see every available skill; read_skill(name) loads "
+    "full instructions.\n"
+    "- When a request matches a skill — or the user selects one in the UI — call "
+    "read_skill(name) FIRST, then follow its workflow using your tools.\n"
+    "- Skills describe how; tools fetch, inspect, and write files.\n"
+)
+
+VISION_SYSTEM_PROMPT_BLOCK = (
+    "\nChat attachments (you CAN see images):\n"
     "- You are a vision-capable model. When an image is in the current message "
     "you can see it directly — describe it; never claim you cannot view images.\n"
     "- User uploads include an attachment id, e.g. (id: abc123).\n"
@@ -99,15 +116,6 @@ SYSTEM_PROMPT = (
     "instead of disavowing it.\n"
     "- Do not call view_attachment for something the user just attached in the "
     "same turn unless you need to re-check it after other edits.\n"
-    "\n"
-    "Agent Skills:\n"
-    "- Reusable task procedures are listed at the end of this prompt (name + "
-    "description only).\n"
-    "- Call list_skills() to see every available skill; read_skill(name) loads "
-    "full instructions.\n"
-    "- When a request matches a skill — or the user selects one in the UI — call "
-    "read_skill(name) FIRST, then follow its workflow using your tools.\n"
-    "- Skills describe how; tools fetch, inspect, and write files.\n"
 )
 
 MAX_TOOL_ROUNDS = 12

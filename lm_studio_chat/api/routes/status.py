@@ -39,6 +39,7 @@ def create_status_router(state: AppState) -> APIRouter:
             "provider": state.provider.id,
             "provider_label": state.provider.label,
             "local": state.provider.local,
+            "supports_vision": getattr(state.provider, "supports_vision", False),
             "model": state.model_id or "unknown",
             "cwd": str(state.shell_cwd),
             "project": project,
@@ -63,8 +64,11 @@ def create_status_router(state: AppState) -> APIRouter:
                 "gpu": None,
             }
         caps = fetch_context_capacity(state.model_id)
+        ctx_win = effective_context_window(caps)
+        if ctx_win is not None:
+            state.context_window = ctx_win
         return {
-            "context_length": effective_context_window(caps),
+            "context_length": ctx_win,
             "max_context_length": caps.get("max") if caps else None,
             "gpu": fetch_gpu_status(state.model_id),
         }

@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live_eval:
+        description: "Also run the live model eval (needs a provider, see below)"
+        type: boolean
+        default: false
+      provider:
+        description: "Provider for the live eval"
+        type: choice
+        options: [openai, lm_studio]
+        default: openai
+      model:
+        description: "Model id (for lm_studio: leave blank to use whatever is loaded)"
+        type: string
+        default: ""
+      tasks:
+        description: "Comma-separated task ids (blank = all)"
+        type: string
+        default: ""
+      repeats:
+        description: "Runs per task (models are non-deterministic)"
+        type: string
+        default: "3"
+
+jobs:
+  test:
+    name: Unit tests and eval self-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Unit tests
+        run: python -m pytest -q
+      - name: Eval self-check (scripted good/bad agents; no model, no API key)
+        run: python -m evals selfcheck
+
+  live-eval:
+    name: Live model eval
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.live_eval }}
+    needs: test
+    # OpenAI runs on a GitHub-hosted runner; LM Studio needs a self-hosted runner that has it loaded.
+    runs-on: ${{ inputs.provider == 'lm_studio' && fromJSON('["self-hosted"]') || fromJSON('["ubuntu-latest"]') }}
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt
+      - name: Run evals
+        shell: bash
+        run: |
+          args=(--provider "${{ inputs.provider }}" --repeats "${{ inputs.repeats }}" --out eval-results)
+          [ -n "${{ inputs.model }}" ] && args+=(--model "${{ inputs.model }}")
+          [ -n "${{ inputs.tasks }}" ] && args+=(--tasks "${{ inputs.tasks }}")
+          python -m evals run "${args[@]}" | tee eval-summary.txt
+          { echo '### Live eval'; echo '```'; cat eval-summary.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-results
+          path: eval-results/

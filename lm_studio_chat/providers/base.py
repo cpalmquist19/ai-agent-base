@@ -19,5 +19,6 @@ class LLMProvider:
     base_url: str
     stream_usage: bool
     local: bool
+    supports_vision: bool = False
     completion_tokens_param: CompletionTokensParam = "max_tokens"
     extra_completion_kwargs: dict[str, Any] = field(default_factory=dict)

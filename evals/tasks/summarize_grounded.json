@@ -1,0 +1,37 @@
+{
+  "id": "summarize_grounded",
+  "category": "groundedness",
+  "description": "Summarize a file without inventing features. Optionally graded by an LLM judge.",
+  "prompt": "Read README.md and summarize what the tool does in two sentences.",
+  "fixtures": {
+    "README.md": "# Pebble\n\nPebble is a command-line tool that renames photo files using the date stored in each photo's EXIF data.\n\n- `--dry-run` shows the new names without changing anything\n- Works on Windows, macOS and Linux\n- Runs entirely offline; it never sends files anywhere\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": "read_file",
+        "args": {
+          "path": "README\\.md"
+        }
+      }
+    ],
+    "answer": {
+      "all_regex": [
+        "renam",
+        "EXIF|date"
+      ],
+      "none_regex": [
+        "\\bGUI\\b",
+        "Docker",
+        "\\bAI\\b",
+        "machine learning",
+        "web (app|interface)"
+      ]
+    },
+    "rubric": {
+      "criteria": "The summary accurately says the tool renames photos by EXIF date, mentions dry-run or offline use, and invents no features that the README does not state.",
+      "min_score": 4
+    },
+    "max_tool_calls": 3
+  }
+}

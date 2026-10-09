@@ -20,7 +20,7 @@ from lm_studio_chat.state import (
     register_active_llm_stream,
 )
 from lm_studio_chat.tools.registry import (
-    TOOL_SCHEMAS,
+    available_tool_schemas,
     dispatch_tool,
     sanitize_tool_args_for_ui,
     tool_activity_summary,
@@ -63,7 +63,7 @@ def create_completion_stream(
                 kwargs: dict[str, Any] = {
                     "model": model_id,
                     "messages": messages,
-                    "tools": TOOL_SCHEMAS,
+                    "tools": available_tool_schemas(),
                     "stream": True,
                     **token_kw,
                     **sampling_kw,

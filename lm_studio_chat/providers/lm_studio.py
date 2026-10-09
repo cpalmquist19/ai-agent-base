@@ -7,6 +7,7 @@ import os
 from openai import APIConnectionError, OpenAI
 
 from lm_studio_chat.config import LM_STUDIO_API_KEY, LM_STUDIO_BASE_URL
+from lm_studio_chat.lm_client import model_supports_vision
 from lm_studio_chat.providers.base import LLMProvider
 
 
@@ -41,4 +42,5 @@ def create_lm_studio_provider() -> LLMProvider:
         base_url=LM_STUDIO_BASE_URL,
         stream_usage=True,
         local=True,
+        supports_vision=model_supports_vision(model_id),
     )

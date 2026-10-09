@@ -168,6 +168,7 @@ def compose_user_message(
     message: str,
     stored: list[dict[str, Any]],
     skill: str | None = None,
+    supports_vision: bool = True,
 ) -> tuple[str, Any, list[dict[str, Any]]]:
     """Build UI text, API content (str or multimodal list), and attachment meta."""
     ui_parts: list[str] = []
@@ -195,15 +196,20 @@ def compose_user_message(
                 f"Attached file `{name}` (id: {att_id}):\n```{lang}\n{body}\n```"
             )
         else:
-            api_parts.append(f"[Attached image: {name}] (id: {att_id})")
-            path = attachment_disk_path(session_id, att_id, ext)
-            url = attachment_image_url(path, rec.get("mime"), ext)
-            image_parts.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": url},
-                }
-            )
+            if supports_vision:
+                api_parts.append(f"[Attached image: {name}] (id: {att_id})")
+                path = attachment_disk_path(session_id, att_id, ext)
+                url = attachment_image_url(path, rec.get("mime"), ext)
+                image_parts.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": url},
+                    }
+                )
+            else:
+                api_parts.append(
+                    f"[Attached image: {name} (id: {att_id}). This model cannot view images; describe it in text or switch to a vision model.]"
+                )
 
     ui_message = "\n\n".join(ui_parts).strip()
     api_text = "\n\n".join(api_parts).strip()
@@ -248,6 +254,8 @@ def recent_image_reinjection(
     state: AppState, session_id: str, history: list[dict[str, Any]]
 ) -> dict[str, Any] | None:
     """Multimodal image part for the most recent prior user turn's image, if any."""
+    if not getattr(state.provider, "supports_vision", False):
+        return None
     last_user: dict[str, Any] | None = None
     for entry in reversed(history):
         if entry.get("role") == "user":
@@ -317,6 +325,12 @@ def tool_view_attachment(ctx: ToolContext, attachment_id: str) -> str | ToolResu
         return (
             f"Attachment '{name}' (id: {att_id}):\n"
             f"```{lang}\n{body}\n```"
+        )
+
+    if not getattr(state.provider, "supports_vision", False):
+        return (
+            f"Attached image '{name}' (id: {att_id}) is on disk, but this model "
+            "cannot view images. Describe the image in text or switch to a vision model."
         )
 
     image_url = attachment_image_url(path, att.get("mime"), att.get("ext", ""))

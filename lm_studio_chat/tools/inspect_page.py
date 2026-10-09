@@ -21,10 +21,18 @@ def _playwright_install_hint() -> str:
     return "pip install playwright && playwright install chromium"
 
 
+def inspect_page_available() -> tuple[bool, str | None]:
+    """Check if inspect_page dependencies are installed."""
+    try:
+        from playwright.sync_api import sync_playwright  # noqa: F401
+    except ImportError:
+        return False, f"Requires playwright ({_playwright_install_hint()})"
+    return True, None
+
+
 def _inspect_page_headless() -> bool:
     headed = os.getenv("LM_STUDIO_INSPECT_PAGE_HEADED", "").strip().lower()
-    # return headed not in ("1", "true", "yes")
-    return False
+    return headed not in ("1", "true", "yes")
 
 
 def _detect_bot_challenge(title: str, snapshot: str, body_text: str) -> bool:

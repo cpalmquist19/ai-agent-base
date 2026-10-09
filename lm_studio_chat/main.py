@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import webbrowser
 
@@ -15,7 +16,12 @@ from lm_studio_chat.state import create_app_state
 
 
 def main() -> None:
-    state = create_app_state()
+    try:
+        state = create_app_state()
+    except RuntimeError as exc:
+        print(f"Startup error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
     saved_project = load_project_root()
     if saved_project is not None:
         state.project_root = saved_project

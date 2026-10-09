@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from lm_studio_chat.config import SYSTEM_PROMPT
+from lm_studio_chat.config import SYSTEM_PROMPT, VISION_SYSTEM_PROMPT_BLOCK
 from lm_studio_chat.skills.discovery import discover_skills
 from lm_studio_chat.state import AppState
 
 
 def build_system_prompt(state: AppState) -> str:
     parts = [SYSTEM_PROMPT]
+    if getattr(state.provider, "supports_vision", False):
+        parts.append(VISION_SYSTEM_PROMPT_BLOCK)
     cwd = state.shell_cwd.resolve()
     parts.append(f"\nWorking directory (relative paths resolve here): {cwd}")
     if state.project_root is not None:

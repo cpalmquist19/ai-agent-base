@@ -16,10 +16,17 @@ from lm_studio_chat.tools.filesystem import (
     tool_str_replace,
     tool_write_file,
 )
-from lm_studio_chat.tools.inspect_page import tool_inspect_page
+from lm_studio_chat.tools.inspect_page import (
+    inspect_page_available,
+    tool_inspect_page,
+)
 from lm_studio_chat.tools.schemas import TOOL_SCHEMAS
 from lm_studio_chat.tools.shell import tool_run_command
-from lm_studio_chat.tools.web import tool_fetch_url, tool_web_search
+from lm_studio_chat.tools.web import (
+    tool_fetch_url,
+    tool_web_search,
+    web_search_available,
+)
 from lm_studio_chat.types import ToolResult
 
 STATE_TOOLS = frozenset(
@@ -106,17 +113,37 @@ def dispatch_tool(name: str, arguments_json: str, *, ctx: ToolContext) -> str | 
         return f"Error while running {name}: {exc}"
 
 
-def tool_catalog() -> list[dict[str, str]]:
-    tools: list[dict[str, str]] = []
+def probe_tool_availability(name: str) -> tuple[bool, str | None]:
+    if name == "web_search":
+        return web_search_available()
+    if name == "inspect_page":
+        return inspect_page_available()
+    return True, None
+
+
+def tool_catalog() -> list[dict[str, Any]]:
+    tools: list[dict[str, Any]] = []
     for schema in TOOL_SCHEMAS:
         fn = schema.get("function") or {}
         name = fn.get("name")
         if not name:
             continue
+        available, unavailable_reason = probe_tool_availability(name)
         tools.append(
             {
                 "name": name,
                 "description": (fn.get("description") or "").strip(),
+                "available": available,
+                "unavailable_reason": unavailable_reason,
             }
         )
     return tools
+
+
+def available_tool_schemas() -> list[dict[str, Any]]:
+    catalog = {t["name"]: t["available"] for t in tool_catalog()}
+    return [
+        s
+        for s in TOOL_SCHEMAS
+        if catalog.get((s.get("function") or {}).get("name"), True)
+    ]

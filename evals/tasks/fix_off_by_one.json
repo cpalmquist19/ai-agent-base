@@ -1,0 +1,38 @@
+{
+  "id": "fix_off_by_one",
+  "category": "editing",
+  "description": "Make a minimal edit that fixes a bug; rewriting the whole file is a failure.",
+  "prompt": "sum_to in mathutil.py is supposed to include n in the total, but it doesn't. Fix it with a minimal edit.",
+  "fixtures": {
+    "mathutil.py": "def sum_to(n):\n    \"\"\"Return 1+2+...+n.\"\"\"\n    total = 0\n    for i in range(1, n):\n        total += i\n    return total\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": "read_file",
+        "args": {
+          "path": "mathutil\\.py"
+        }
+      },
+      {
+        "tool": "str_replace",
+        "args": {
+          "path": "mathutil\\.py"
+        }
+      }
+    ],
+    "forbidden_tools": [
+      "write_file"
+    ],
+    "files": [
+      {
+        "path": "mathutil.py",
+        "contains": [
+          "Return 1+2+...+n"
+        ]
+      }
+    ],
+    "python_check": "from mathutil import sum_to; assert sum_to(4) == 10; assert sum_to(1) == 1; assert sum_to(0) == 0",
+    "max_tool_calls": 4
+  }
+}

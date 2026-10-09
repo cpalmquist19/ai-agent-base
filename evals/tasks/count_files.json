@@ -1,0 +1,22 @@
+{
+  "id": "count_files",
+  "category": "exploration",
+  "description": "Explore nested folders to count files.",
+  "prompt": "How many .py files are in this project, including subfolders? Reply with the number and a short note.",
+  "fixtures": {
+    "a.py": "x = 1\n",
+    "notes.md": "# notes\n",
+    "pkg/b.py": "x = 2\n",
+    "pkg/c.py": "x = 3\n",
+    "pkg/sub/d.py": "x = 4\n",
+    "pkg/sub/readme.md": "# sub\n"
+  },
+  "expect": {
+    "answer": {
+      "all_regex": [
+        "\\b4\\b"
+      ]
+    },
+    "max_tool_calls": 8
+  }
+}
