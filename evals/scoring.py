@@ -16,9 +16,12 @@ still shows it took the long way.
 
 from __future__ import annotations
 
+import ast
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -91,7 +94,82 @@ def check_files(root: Path, specs: list[dict[str, Any]]) -> list[str]:
         for pattern in spec.get("regex", []):
             if not _search(pattern, text):
                 failures.append(f"{spec['path']}: expected to match /{pattern}/")
+        for limit in spec.get("max_matches", []):  # e.g. a duplicated expression must now appear once
+            count = len(re.findall(limit["pattern"], text))
+            if count > limit["max"]:
+                failures.append(f"{spec['path']}: /{limit['pattern']}/ appears {count} times, at most {limit['max']} allowed")
+        if spec.get("defines"):
+            try:
+                tree = ast.parse(text)
+            except SyntaxError as exc:
+                failures.append(f"{spec['path']}: does not parse ({exc.msg})")
+                continue
+            defined = {n.name for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
+            for name in spec["defines"]:
+                if name not in defined:
+                    failures.append(f"{spec['path']}: function {name}() is missing (public names must not change)")
     return failures
+
+
+def check_unchanged(root: Path, fixtures: dict[str, str], paths: list[str]) -> list[str]:
+    """Files the agent was not supposed to touch (for example, the tests it must not edit to pass)."""
+    failures = []
+    for rel in paths:
+        path = root / rel
+        if not path.is_file():
+            failures.append(f"{rel}: was deleted or moved")
+        elif path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n") != fixtures[rel]:
+            failures.append(f"{rel}: was modified but should have been left alone")
+    return failures
+
+
+def _run_unittest(cwd: Path, module: str, timeout: int = 20) -> tuple[str, str]:
+    """Run ``python -m unittest <module>``; return (``pass``|``fail``|``timeout``, last output line)."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "unittest", "-q", module],
+            cwd=cwd, capture_output=True, text=True, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return "timeout", f"timed out after {timeout}s"
+    tail = ((proc.stderr or proc.stdout).strip().splitlines() or [""])[-1]
+    return ("pass" if proc.returncode == 0 else "fail"), tail
+
+
+def check_hidden_tests(root: Path, tests: dict[str, str]) -> list[str]:
+    """Run tests the agent never saw, so special-casing the visible tests is not enough."""
+    failures = []
+    for filename, source in tests.items():
+        (root / filename).write_text(source, encoding="utf-8", newline="\n")
+        status, tail = _run_unittest(root, Path(filename).stem)
+        if status != "pass":
+            failures.append(f"hidden tests {filename} {status}: {tail}")
+    return failures
+
+
+def check_mutation(root: Path, spec: dict[str, Any]) -> list[str]:
+    """Score tests the agent wrote: they must pass the real code and fail on planted bugs."""
+    tests_path, target = spec["tests_path"], spec["module_path"]
+    if not (root / tests_path).is_file():
+        return [f"{tests_path} was not created"]
+    stem = Path(tests_path).stem
+    status, tail = _run_unittest(root, stem)
+    if status != "pass":
+        return [f"the tests fail on the correct implementation ({status}): {tail}"]
+    killed = []
+    for name, source in spec["mutants"].items():
+        with tempfile.TemporaryDirectory(prefix="mutant_") as tmp:
+            work = Path(tmp) / "work"
+            shutil.copytree(root, work, ignore=shutil.ignore_patterns("__pycache__"))
+            (work / target).write_text(source, encoding="utf-8", newline="\n")
+            mutant_status, _ = _run_unittest(work, stem)
+        if mutant_status == "fail":  # a timeout does not count as catching the bug
+            killed.append(name)
+    needed = spec.get("min_killed", len(spec["mutants"]))
+    if len(killed) < needed:
+        missed = sorted(set(spec["mutants"]) - set(killed))
+        return [f"tests caught {len(killed)}/{len(spec['mutants'])} planted bugs (need {needed}); missed: {missed}"]
+    return []
 
 
 def check_python(root: Path, snippet: str, timeout: int = 15) -> list[str]:
@@ -155,6 +233,11 @@ def score_run(
     outcome_failures = check_files(root, expect.get("files", []))
     if "python_check" in expect:
         outcome_failures += check_python(root, expect["python_check"])
+    outcome_failures += check_unchanged(root, task.get("fixtures", {}), expect.get("unchanged_files", []))
+    if "hidden_tests" in expect:
+        outcome_failures += check_hidden_tests(root, expect["hidden_tests"])
+    if "mutation_check" in expect:
+        outcome_failures += check_mutation(root, expect["mutation_check"])
     if "answer" in expect:
         outcome_failures += check_answer(answer, expect["answer"])
     judge_info = None

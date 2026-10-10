@@ -18,6 +18,9 @@ _EXPECT_KEYS = {
     "python_check",
     "answer",
     "rubric",
+    "unchanged_files",
+    "hidden_tests",
+    "mutation_check",
 }
 
 
@@ -40,6 +43,9 @@ def validate_task(task: dict[str, Any], source: str = "<task>") -> None:
         names = tool if isinstance(tool, list) else [tool]
         if not names or not all(isinstance(n, str) and n for n in names):
             raise TaskError(f"{source}: every step needs a 'tool' (a name, or a list of acceptable names)")
+    for rel in task["expect"].get("unchanged_files", []):
+        if rel not in task.get("fixtures", {}):
+            raise TaskError(f"{source}: unchanged_files lists {rel!r}, which is not a fixture")
     if "{OUTSIDE}" in task["prompt"] and not task.get("outside_fixtures"):
         raise TaskError(f"{source}: prompt uses {{OUTSIDE}} but there are no outside_fixtures")
     for canary in task.get("canaries", []):

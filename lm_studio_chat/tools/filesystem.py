@@ -202,8 +202,19 @@ def tool_list_dir(state: AppState, path: str) -> str:
     return "\n".join(entries) if entries else "(empty)"
 
 
+def _nul_error(what: str) -> str:
+    return (
+        f"Error: {what} contains a NUL character (U+0000). Text files can't hold one, and it almost always "
+        "means a unicode escape was mangled: source code that should keep a backslash-u escape arrived "
+        "as a NUL followed by hex digits. Nothing was written. Send the real character, or double the "
+        "backslash in the JSON to put a backslash-u escape into the file."
+    )
+
+
 def tool_write_file(state: AppState, path: str, content: str) -> str:
     """Create or overwrite a UTF-8 text file. Parent dirs are created as needed."""
+    if "\x00" in content:
+        return _nul_error("content")
     try:
         p = resolve_tool_path(state, path)
     except ValueError as exc:
@@ -220,6 +231,8 @@ def tool_str_replace(
     state: AppState, path: str, old_string: str, new_string: str
 ) -> str:
     """Replace exactly one occurrence of old_string with new_string in a file."""
+    if "\x00" in new_string:
+        return _nul_error("new_string")
     try:
         p = resolve_tool_path(state, path)
     except ValueError as exc:

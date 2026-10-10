@@ -12,6 +12,7 @@ from lm_studio_chat.config import (
     MAX_TOOL_ROUNDS,
     TEMPERATURE,
 )
+from lm_studio_chat.chat.usage import add_usage, empty_usage, read_usage
 from lm_studio_chat.logging import log_write
 from lm_studio_chat.state import (
     AppState,
@@ -86,6 +87,25 @@ def create_completion_stream(
     raise last_exc
 
 
+def tool_call_slot(
+    index: int | None, call_id: str | None, accum: dict[int, dict[str, Any]]
+) -> int:
+    """Pick the accumulator slot for one streamed tool-call fragment.
+
+    OpenAI-style streams number every fragment with ``index``. Gemini's
+    OpenAI-compatible layer sends ``index=None`` and a complete call per chunk, so
+    fall back to the call id, and then to the most recent slot.
+    """
+    if index is not None:
+        return index
+    if call_id:
+        for key, slot in accum.items():
+            if slot["id"] == call_id:
+                return key
+        return len(accum)
+    return max(accum, default=0)
+
+
 def delta_text_field(delta: Any, *names: str) -> str:
     """Pull a string field from a streaming delta (incl. vendor extras)."""
     for name in names:
@@ -141,6 +161,7 @@ def run_chat(
     thinking_id: str | None = None
     last_thinking_yield = 0.0
     tool_activity_ids: dict[str, str] = {}
+    usage_totals = empty_usage()  # every model call this turn, not just the last (session_usage keeps that)
 
     def _cancelled() -> bool:
         return bool(should_cancel and should_cancel())
@@ -157,6 +178,7 @@ def run_chat(
             tool_events=list(tool_events),
             activity=_status_segments(),
             segments=list(segments),
+            usage=dict(usage_totals) if usage_totals["calls"] else None,
         )
 
     def _set_segment(seg_id: str, **fields: Any) -> None:
@@ -363,6 +385,7 @@ def run_chat(
         tool_calls_accum: dict[int, dict[str, Any]] = {}
         finish_reason: str | None = None
         usage_info: dict[str, Any] | None = None
+        round_usage: dict[str, int] | None = None
         cancelled_mid_stream = False
         stream_dirty = False
 
@@ -383,6 +406,7 @@ def run_chat(
                         "completion_tokens": getattr(usage, "completion_tokens", None),
                         "total_tokens": getattr(usage, "total_tokens", None),
                     }
+                    round_usage = read_usage(usage)
                 if not chunk.choices:
                     continue
                 choice = chunk.choices[0]
@@ -413,8 +437,9 @@ def run_chat(
                     _end_thinking()
                     _close_text_segment()
                     for tc in delta.tool_calls:
+                        slot_key = tool_call_slot(tc.index, tc.id, tool_calls_accum)
                         slot = tool_calls_accum.setdefault(
-                            tc.index,
+                            slot_key,
                             {
                                 "id": "",
                                 "type": "function",
@@ -423,12 +448,17 @@ def run_chat(
                         )
                         if tc.id:
                             slot["id"] = tc.id
+                        # Gemini 3 attaches a thought_signature here and rejects the
+                        # next request if the call comes back without it.
+                        extra_content = getattr(tc, "extra_content", None)
+                        if extra_content:
+                            slot["extra_content"] = extra_content
                         if tc.function:
                             if tc.function.name:
                                 slot["function"]["name"] = tc.function.name
                             if tc.function.arguments:
                                 slot["function"]["arguments"] += tc.function.arguments
-                        tc_id = slot["id"] or f"idx-{tc.index}"
+                        tc_id = slot["id"] or f"idx-{slot_key}"
                         name = slot["function"]["name"] or "tool"
                         try:
                             parsed_args = json.loads(
@@ -446,6 +476,11 @@ def run_chat(
             clear_active_llm_stream(state, stream)
             if cancelled_mid_stream:
                 _close_stream(stream)
+
+        usage_totals["calls"] += 1
+        if round_usage is not None:
+            usage_totals["calls_with_usage"] += 1
+            add_usage(usage_totals, round_usage)
 
         if stream_dirty and not cancelled_mid_stream:
             _update_thinking_snippet(reasoning_buf)

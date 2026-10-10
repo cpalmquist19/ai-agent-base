@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace as NS
 
+import json
+
 import pytest
 
 from evals.judge import LLMJudge, parse_judge_reply
@@ -378,10 +380,15 @@ def test_cli_run_report_and_check_end_to_end(tmp_path, monkeypatch, capsys):
     out = tmp_path / "results"
     code = cli.main(["run", "--tasks", "read_and_answer", "--repeats", "2", "--out", str(out)])
     assert code == 0
-    files = sorted(out.glob("*.json"))
-    assert len(files) == 1
+    run_dirs = list((out / "runs").iterdir())
+    assert len(run_dirs) == 1, "each invocation gets its own timestamped folder"
+    run_dir = run_dirs[0]
+    files = [p for p in run_dir.glob("*.json") if p.name != "run.json"]
+    assert [p.name for p in files] == ["scripted__scripted-1.json"]
     assert (out / ".gitignore").exists()
-    assert list((out / "traces").rglob("*.json")), "expected one trace per run"
+    assert list((run_dir / "traces").rglob("*.json")), "expected one trace per run"
+    assert json.loads((run_dir / "run.json").read_text(encoding="utf-8"))["status"] == "complete"
+    assert (run_dir / "dashboard.html").exists() and (out / "index.html").exists()
     printed = capsys.readouterr().out
     assert "[PASS] read_and_answer" in printed and "scripted:scripted-1" in printed
 
@@ -428,3 +435,101 @@ def test_render_run_flags_errors_and_failures():
 
 def test_selfcheck_reference_agents_score_as_designed():
     assert run_selfcheck(verbose=False) == []
+
+
+# ---- developer-task scoring: hidden tests, untouched files, structure, mutation ------------------
+
+from evals.scoring import check_files, check_hidden_tests, check_mutation, check_unchanged  # noqa: E402
+
+_ADD = "def add(a, b):\n    return a + b\n"
+
+
+def test_hidden_tests_are_run_after_the_agent_finishes(tmp_path):
+    (tmp_path / "calc.py").write_text(_ADD, encoding="utf-8")
+    good = "import unittest\nfrom calc import add\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(add(2, 3), 5)\n"
+    bad = good.replace("5)", "6)")
+    assert check_hidden_tests(tmp_path, {"test_hidden_ok.py": good}) == []
+    failures = check_hidden_tests(tmp_path, {"test_hidden_bad.py": bad})
+    assert len(failures) == 1 and "hidden tests test_hidden_bad.py fail" in failures[0]
+
+
+def test_untouched_files_are_checked_against_the_original_text(tmp_path):
+    (tmp_path / "keep.py").write_text("x = 1\n", encoding="utf-8")
+    assert check_unchanged(tmp_path, {"keep.py": "x = 1\n"}, ["keep.py"]) == []
+    (tmp_path / "keep.py").write_text("x = 2\n", encoding="utf-8")
+    assert "modified" in check_unchanged(tmp_path, {"keep.py": "x = 1\n"}, ["keep.py"])[0]
+    (tmp_path / "keep.py").unlink()
+    assert "deleted" in check_unchanged(tmp_path, {"keep.py": "x = 1\n"}, ["keep.py"])[0]
+
+
+def test_untouched_check_ignores_windows_line_endings(tmp_path):
+    (tmp_path / "keep.py").write_bytes(b"x = 1\r\ny = 2\r\n")
+    assert check_unchanged(tmp_path, {"keep.py": "x = 1\ny = 2\n"}, ["keep.py"]) == []
+
+
+def test_structure_checks_count_duplicates_and_required_names(tmp_path):
+    (tmp_path / "m.py").write_text("def a():\n    return round(x * R, 2)\n\ndef b():\n    return round(x * R, 2)\n", encoding="utf-8")
+    spec = [{"path": "m.py", "defines": ["a", "b", "c"], "max_matches": [{"pattern": r"round\(x \* R, 2\)", "max": 1}]}]
+    failures = check_files(tmp_path, spec)
+    assert any("appears 2 times, at most 1" in f for f in failures)
+    assert any("function c() is missing" in f for f in failures)
+    (tmp_path / "m.py").write_text("def broken(:\n", encoding="utf-8")
+    assert any("does not parse" in f for f in check_files(tmp_path, spec))
+
+
+_MUTATION = {
+    "tests_path": "test_calc.py",
+    "module_path": "calc.py",
+    "mutants": {"minus": "def add(a, b):\n    return a - b\n", "first_only": "def add(a, b):\n    return a\n"},
+    "min_killed": 2,
+}
+
+
+def _calc_project(tmp_path, tests):
+    (tmp_path / "calc.py").write_text(_ADD, encoding="utf-8")
+    if tests is not None:
+        (tmp_path / "test_calc.py").write_text(tests, encoding="utf-8")
+    return tmp_path
+
+
+def test_mutation_check_rewards_tests_that_catch_planted_bugs(tmp_path):
+    strong = "import unittest\nfrom calc import add\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(add(2, 3), 5)\n"
+    assert check_mutation(_calc_project(tmp_path, strong), _MUTATION) == []
+
+
+def test_mutation_check_reports_missed_bugs(tmp_path):
+    # add(2, 2) == 4 exposes "minus" (0) but not "times" (also 4), so exactly one bug is caught
+    spec = {**_MUTATION, "mutants": {"minus": "def add(a, b):\n    return a - b\n", "times": "def add(a, b):\n    return a * b\n"}}
+    weak = "import unittest\nfrom calc import add\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(add(2, 2), 4)\n"
+    failures = check_mutation(_calc_project(tmp_path, weak), spec)
+    assert len(failures) == 1 and "caught 1/2" in failures[0] and "missed: ['times']" in failures[0]
+
+
+def test_mutation_check_fails_when_no_test_file_was_written(tmp_path):
+    assert "was not created" in check_mutation(_calc_project(tmp_path, None), _MUTATION)[0]
+
+
+def test_mutation_check_fails_tests_that_do_not_pass_on_the_correct_code(tmp_path):
+    wrong = "import unittest\nfrom calc import add\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(add(2, 3), 99)\n"
+    assert "fail on the correct implementation" in check_mutation(_calc_project(tmp_path, wrong), _MUTATION)[0]
+
+
+def test_mutation_check_gives_no_credit_for_a_test_file_with_no_tests(tmp_path):
+    failures = check_mutation(_calc_project(tmp_path, "import unittest\n"), _MUTATION)
+    assert failures  # either "fail on the correct implementation" (NO TESTS RAN) or "caught 0/2"
+
+
+def test_a_hanging_test_does_not_count_as_catching_a_bug(tmp_path, monkeypatch):
+    import evals.scoring as scoring
+
+    real = scoring._run_unittest
+    # the baseline passes; every mutant run "times out"
+    monkeypatch.setattr(scoring, "_run_unittest", lambda cwd, module, timeout=20: real(cwd, module, timeout) if "mutant_" not in str(cwd) else ("timeout", "slow"))
+    strong = "import unittest\nfrom calc import add\nclass T(unittest.TestCase):\n    def test(self):\n        self.assertEqual(add(2, 3), 5)\n"
+    failures = check_mutation(_calc_project(tmp_path, strong), _MUTATION)
+    assert failures and "0/2" in failures[0]
+
+
+def test_unchanged_files_must_be_fixtures():
+    with pytest.raises(TaskError):
+        validate_task({"id": "x", "prompt": "p", "fixtures": {"a.py": ""}, "expect": {"unchanged_files": ["b.py"]}})

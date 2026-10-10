@@ -38,6 +38,11 @@ def calls(*tool_calls: dict[str, Any]) -> dict[str, Any]:
     return {"tool_calls": merged}
 
 
+def gemini_calls(*tool_calls: dict[str, Any]) -> dict[str, Any]:
+    """Several tool calls streamed the way Gemini's OpenAI-compatible endpoint does."""
+    return {**calls(*tool_calls), "gemini_style": True}
+
+
 EMPTY: dict[str, Any] = {}
 
 
@@ -60,8 +65,16 @@ def _chunks_for(step: dict[str, Any], call_no: int) -> Iterator[Any]:
     for index, tc in enumerate(step.get("tool_calls", [])):
         args = tc.get("arguments", {})
         args_json = args if isinstance(args, str) else json.dumps(args)
-        half = max(1, len(args_json) // 2)
         tc_id = f"call_{call_no}_{index}"
+        if step.get("gemini_style"):
+            # Gemini's OpenAI-compatible stream: no index, one whole call per chunk, and a
+            # thought_signature on the first call that must be echoed back.
+            delta = NS(index=None, id=tc_id, function=NS(name=tc["name"], arguments=args_json))
+            if index == 0:
+                delta.extra_content = {"google": {"thought_signature": f"sig_{call_no}"}}
+            yield _chunk(tool_calls=[delta])
+            continue
+        half = max(1, len(args_json) // 2)
         # Split name and arguments across chunks to exercise the engine's accumulator.
         yield _chunk(
             tool_calls=[

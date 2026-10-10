@@ -1,0 +1,41 @@
+{
+  "id": "write_tests_that_catch_bugs",
+  "category": "testing",
+  "description": "Write unit tests; they are scored by how many planted bugs they catch (mutation testing).",
+  "prompt": "Write unit tests for slugify in slugify.py using Python's unittest, and save them as test_slugify.py. Cover its documented behaviour thoroughly, including edge cases. Your tests must pass against the current slugify.py. Do not change slugify.py.",
+  "fixtures": {
+    "slugify.py": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]+\", \"-\", text.lower()).strip(\"-\")\n    if len(slug) > max_length:\n        slug = slug[:max_length].rstrip(\"-\")\n    return slug\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": [
+          "read_file",
+          "search_file"
+        ]
+      },
+      {
+        "tool": "write_file",
+        "args": {
+          "path": "test_slugify\\.py"
+        }
+      }
+    ],
+    "unchanged_files": [
+      "slugify.py"
+    ],
+    "mutation_check": {
+      "tests_path": "test_slugify.py",
+      "module_path": "slugify.py",
+      "mutants": {
+        "keeps_uppercase": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]+\", \"-\", text).strip(\"-\")\n    if len(slug) > max_length:\n        slug = slug[:max_length].rstrip(\"-\")\n    return slug\n",
+        "one_hyphen_per_symbol": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]\", \"-\", text.lower()).strip(\"-\")\n    if len(slug) > max_length:\n        slug = slug[:max_length].rstrip(\"-\")\n    return slug\n",
+        "keeps_edge_hyphens": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]+\", \"-\", text.lower())\n    if len(slug) > max_length:\n        slug = slug[:max_length].rstrip(\"-\")\n    return slug\n",
+        "length_off_by_one": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]+\", \"-\", text.lower()).strip(\"-\")\n    if len(slug) > max_length:\n        slug = slug[:max_length + 1].rstrip(\"-\")\n    return slug\n",
+        "trailing_hyphen_after_cut": "import re\n\n\ndef slugify(text, max_length=50):\n    \"\"\"Lowercase text, turn each run of non-alphanumeric characters into one hyphen,\n    strip leading and trailing hyphens, and cut to max_length without leaving a trailing hyphen.\"\"\"\n    slug = re.sub(r\"[^a-z0-9]+\", \"-\", text.lower()).strip(\"-\")\n    if len(slug) > max_length:\n        slug = slug[:max_length]\n    return slug\n"
+      },
+      "min_killed": 4
+    },
+    "max_tool_calls": 6
+  }
+}

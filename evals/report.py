@@ -8,6 +8,7 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+from evals.cost import annotate_result, format_usd
 from evals.scoring import DIMENSIONS
 
 
@@ -34,7 +35,8 @@ def build_result(records: list[Any], meta: dict[str, Any]) -> dict[str, Any]:
         "mean_duration_s": mean(r.duration_s for r in all_runs) if all_runs else 0.0,
         "mean_nudges": mean(r.extra.get("nudges", 0) for r in all_runs) if all_runs else 0.0,
     }
-    return {"meta": meta, "summary": summary, "tasks": tasks}
+    # token counts and dollar cost per run, per task and overall (evals/cost.py)
+    return annotate_result({"meta": meta, "summary": summary, "tasks": tasks})
 
 
 def _clip(text: Any, limit: int) -> str:
@@ -71,9 +73,6 @@ def save_run_log(records: list[Any], prompts: dict[str, str], directory: Path) -
 
 def save_result(result: dict[str, Any], directory: Path, stem: str) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
-    ignore = directory / ".gitignore"
-    if not ignore.exists():  # raw results stay local; copy keepers to evals/baselines/
-        ignore.write_text("*.json\ntraces/\n", encoding="utf-8")
     path = directory / f"{stem}.json"
     path.write_text(json.dumps(result, indent=2, default=str), encoding="utf-8")
     return path
@@ -83,10 +82,21 @@ def load_result(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _cost_cells(cost: dict[str, Any]) -> list[str]:
+    """$/run, $/passing run and total for one model. ``~`` marks a figure rebuilt from transcripts."""
+    if not cost:
+        return ["n/a", "n/a", "n/a"]
+    if cost.get("free"):
+        return ["free", "free", "free"]
+    mark = "~" if cost.get("source") in ("estimated", "partial", "mixed") else ""
+    cells = [format_usd(cost.get(k)) for k in ("per_run_usd", "per_pass_usd", "total_usd")]
+    return [c if c == "n/a" else mark + c for c in cells]
+
+
 def render_markdown(results: list[dict[str, Any]]) -> str:
-    """One row per model/run file, with overall and per-task pass rates."""
+    """One row per model/run file, with overall and per-task pass rates and what it cost."""
     task_ids = sorted({t for r in results for t in r["tasks"]})
-    head = ["Model", "Pass", "Tool sel.", "Args ok", "Efficiency", "Nudges/run", "Avg s/run", "Repeats", *task_ids]
+    head = ["Model", "Pass", "Tool sel.", "Args ok", "Efficiency", "Nudges/run", "Avg s/run", "$/run", "$/pass", "Total $", "Repeats", *task_ids]
     lines = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] * len(head)) + "|"]
     for r in results:
         s, meta = r["summary"], r["meta"]
@@ -98,6 +108,7 @@ def render_markdown(results: list[dict[str, Any]]) -> str:
             f"{s['mean_scores'].get('efficiency', 0):.2f}",
             f"{s.get('mean_nudges', 0):.1f}",
             f"{s['mean_duration_s']:.1f}",
+            *_cost_cells(s.get("cost") or {}),
             str(meta.get("repeats", 1)),
         ]
         for tid in task_ids:

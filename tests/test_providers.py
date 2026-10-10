@@ -134,6 +134,86 @@ def test_anthropic_rejects_temperature_below_zero(monkeypatch):
         create_provider()
 
 
+def test_google_requires_api_key(monkeypatch):
+    _cloud(monkeypatch, "google", GOOGLE_AI_STUDIO_MODEL="gemini-3.8-flash")
+    monkeypatch.delenv("GOOGLE_AI_STUDIO_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="GOOGLE_AI_STUDIO_API_KEY"):
+        create_provider()
+
+
+def test_google_requires_model(monkeypatch):
+    _cloud(monkeypatch, "google", GOOGLE_AI_STUDIO_API_KEY="key-test")
+    monkeypatch.delenv("GOOGLE_AI_STUDIO_MODEL", raising=False)
+    with pytest.raises(RuntimeError, match="GOOGLE_AI_STUDIO_MODEL"):
+        create_provider()
+
+
+def test_google_provider_defaults(monkeypatch):
+    _cloud(
+        monkeypatch,
+        "google",
+        GOOGLE_AI_STUDIO_API_KEY="key-test",
+        GOOGLE_AI_STUDIO_MODEL="gemini-3.8-flash",
+    )
+    for name in (
+        "GOOGLE_AI_STUDIO_BASE_URL",
+        "GOOGLE_AI_STUDIO_CONTEXT_WINDOW",
+        "GOOGLE_AI_STUDIO_TEMPERATURE",
+        "GOOGLE_AI_STUDIO_REASONING_EFFORT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    provider = create_provider()
+    assert provider.id == "google"
+    assert provider.label == "Google AI Studio"
+    assert provider.model_id == "gemini-3.8-flash"
+    assert provider.local is False
+    assert provider.supports_vision is True
+    assert provider.stream_usage is True
+    assert provider.completion_tokens_param == "max_tokens"
+    assert provider.context_window == 1_000_000
+    assert provider.omit_temperature is True
+    assert provider.temperature is None
+    assert provider.extra_completion_kwargs == {}
+    assert provider.base_url == "https://generativelanguage.googleapis.com/v1beta/openai/"
+
+
+def test_google_temperature_reasoning_and_context_overrides(monkeypatch):
+    _cloud(
+        monkeypatch,
+        "google",
+        GOOGLE_AI_STUDIO_API_KEY="key-test",
+        GOOGLE_AI_STUDIO_MODEL="gemini-3.8-flash",
+        GOOGLE_AI_STUDIO_TEMPERATURE="0.4",
+        GOOGLE_AI_STUDIO_REASONING_EFFORT="Low",
+        GOOGLE_AI_STUDIO_CONTEXT_WINDOW="200000",
+    )
+    provider = create_provider()
+    assert provider.omit_temperature is False
+    assert provider.temperature == 0.4
+    assert provider.extra_completion_kwargs == {"reasoning_effort": "low"}
+    assert provider.context_window == 200_000
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("GOOGLE_AI_STUDIO_TEMPERATURE", "2.5"),
+        ("GOOGLE_AI_STUDIO_TEMPERATURE", "hot"),
+        ("GOOGLE_AI_STUDIO_REASONING_EFFORT", "extreme"),
+    ],
+)
+def test_google_rejects_bad_settings(monkeypatch, name, value):
+    _cloud(
+        monkeypatch,
+        "google",
+        GOOGLE_AI_STUDIO_API_KEY="key-test",
+        GOOGLE_AI_STUDIO_MODEL="gemini-3.8-flash",
+        **{name: value},
+    )
+    with pytest.raises(RuntimeError, match=name):
+        create_provider()
+
+
 def test_unknown_provider_names_the_supported_set(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "chatgpt")
     with pytest.raises(RuntimeError, match="anthropic"):

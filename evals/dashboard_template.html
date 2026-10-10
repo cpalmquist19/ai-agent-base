@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval run report</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10); --wash: rgba(11,11,11,.05);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #8559d4;
+  --good: #0ca30c; --bad: #d03b3b; --warn: #9a6a00; --good-text: #006300; --bad-text: #a52a2a;
+  --seq-0: #cde2fb; --seq-1: #9ec5f4; --seq-2: #6da7ec; --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #184f95; --seq-6: #0d366b;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.06);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9a74e6; --good-text: #0ca30c; --bad-text: #ff7b7b; --warn: #fab219;
+    --seq-0: #0d366b; --seq-1: #184f95; --seq-2: #256abf; --seq-3: #3987e5; --seq-4: #6da7ec; --seq-5: #9ec5f4; --seq-6: #cde2fb;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.06);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #9a74e6; --good-text: #0ca30c; --bad-text: #ff7b7b; --warn: #fab219;
+  --seq-0: #0d366b; --seq-1: #184f95; --seq-2: #256abf; --seq-3: #3987e5; --seq-4: #6da7ec; --seq-5: #9ec5f4; --seq-6: #cde2fb;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 64px; }
+h1 { font-size: 22px; margin: 2px 0 0; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
+a { color: var(--s1); }
+.back { font-size: 13px; text-decoration: none; }
+.back:hover { text-decoration: underline; }
+.sub { color: var(--ink-2); margin: 4px 0 0; }
+.note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 10px; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--border); margin-right: 8px; }
+.badge.ok { color: var(--good-text); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad-text); }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 10px 14px; margin-bottom: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.filters label { font-size: 13px; color: var(--ink-2); }
+select, .btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; }
+.btn { cursor: pointer; }
+.btn:hover { background: var(--wash); }
+#app { display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 980px) { .grid2 { grid-template-columns: 1fr; } }
+.kpis { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 14px; }
+@media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; }
+.tile .label { color: var(--ink-2); font-size: 12.5px; }
+.tile .value { font-size: 28px; font-weight: 650; margin-top: 2px; }
+.tile .hero { font-size: 52px; line-height: 1.05; font-weight: 650; }
+.tile .foot { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+ul.findings { margin: 6px 0 0; padding-left: 18px; }
+ul.findings li { margin: 4px 0; }
+svg text { font-family: inherit; fill: var(--ink-2); font-size: 12px; }
+svg .ink { fill: var(--ink); }
+svg .muted { fill: var(--muted); }
+svg .hit { cursor: pointer; }
+svg .hit:hover .lift, svg .hit:focus .lift { stroke: var(--ink); stroke-width: 1.5px; }
+svg .hit:focus { outline: none; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin: 4px 0 8px; }
+.legend i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; font-size: 12px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.bar { display: inline-block; height: 8px; border-radius: 4px; background: var(--s1); opacity: .7; vertical-align: middle; margin-left: 8px; }
+.cheap { font-weight: 650; color: var(--good-text); }
+td.dim { color: var(--muted); }
+#tip { position: fixed; z-index: 10; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 12.5px; max-width: 300px; display: none; }
+#tip b { font-size: 14px; }
+#tip .row { color: var(--ink-2); }
+.run { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+.run.fail { border-left: 3px solid var(--bad); }
+.run.pass { border-left: 3px solid var(--good); }
+.run h3 { margin: 0 0 4px; font-size: 13.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 6px; }
+.chip { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--wash); color: var(--ink-2); }
+.chip.low { color: var(--bad-text); }
+pre { white-space: pre-wrap; word-break: break-word; background: var(--wash); border-radius: 8px; padding: 8px 10px; margin: 4px 0; max-height: 220px; overflow: auto; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; color: var(--ink); }
+.calls { list-style: none; margin: 4px 0; padding: 0; font: 12.5px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.calls .ok { color: var(--good-text); } .calls .err { color: var(--bad-text); }
+.fails { margin: 4px 0 0; padding-left: 18px; color: var(--bad-text); }
+.pass-text { color: var(--good-text); font-weight: 600; } .fail-text { color: var(--bad-text); font-weight: 600; }
+details { margin-top: 6px; } summary { cursor: pointer; color: var(--ink-2); }
+.empty { color: var(--ink-2); padding: 24px 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; user-select: all; }
+dl.def { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 6px 0; } dl.def dt { font-weight: 600; } dl.def dd { margin: 0; color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <a class="back" id="back" href="../../index.html">← All runs</a>
+      <h1 id="title">Eval run</h1>
+      <p class="sub" id="meta"></p>
+    </div>
+    <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">Theme</button>
+  </header>
+
+  <div class="filters" id="filters" role="group" aria-label="Filters. They apply to everything below."></div>
+
+  <div id="empty" class="card empty" hidden>This run folder has no result files.</div>
+
+  <div id="app">
+    <div class="kpis" id="kpis" style="order:1"></div>
+
+    <section class="card" style="order:2" aria-labelledby="h-find">
+      <h2 id="h-find">What the data says</h2>
+      <p class="note">Generated from the numbers below, so it follows the filters. Treat it as a reading aid, not a verdict.</p>
+      <ul class="findings" id="findings"></ul>
+    </section>
+
+    <section class="card" id="banner" style="order:3" hidden aria-live="polite"></section>
+
+    <div class="grid2" style="order:4">
+      <section class="card" aria-labelledby="h-lead">
+        <h2 id="h-lead">Pass rate by model</h2>
+        <p class="note">Bar = share of runs that passed. Whisker = 95% interval: if two whiskers overlap, the data can't say which model is better.</p>
+        <div class="legend" id="legend-lead"></div>
+        <div id="lead"></div>
+      </section>
+      <section class="card" aria-labelledby="h-speed">
+        <h2 id="h-speed">Quality versus speed or cost</h2>
+        <p class="note" id="speed-note"></p>
+        <div class="filters" id="axis-pick" style="padding:6px 10px;margin-bottom:8px"></div>
+        <div class="legend" id="legend-speed"></div>
+        <div id="speed"></div>
+      </section>
+    </div>
+
+    <section class="card" style="order:5" aria-labelledby="h-cost">
+      <h2 id="h-cost">What it costs</h2>
+      <p class="note" id="cost-note"></p>
+      <div class="scroll" id="cost"></div>
+      <h2 style="margin-top:16px">Cost per run, by task</h2>
+      <p class="note">What one run of each task costs on average. The cheapest model for each task is in green, so you can see which tasks are expensive and whether the cheap model holds up on them.</p>
+      <div class="scroll" id="cost-tasks"></div>
+    </section>
+
+    <section class="card" style="order:6" aria-labelledby="h-heat">
+      <h2 id="h-heat">Where each model passes and fails</h2>
+      <p class="note">Each cell is passed runs / total runs for one task. Darker means more passes. <b>Click a cell</b> to read the actual prompt, tool calls and answer. "Spread" shows whether the task separates models at all.</p>
+      <div class="scroll" id="heat"></div>
+    </section>
+
+    <section class="card" id="drill" style="order:7" aria-live="polite" aria-labelledby="h-drill">
+      <h2 id="h-drill">Run details</h2>
+      <p class="note" id="drill-note">Click a heatmap cell or a leaderboard bar to see exactly what the model did.</p>
+      <div id="drill-body"></div>
+    </section>
+
+    <section class="card" style="order:8" aria-labelledby="h-score">
+      <h2 id="h-score">How each model behaves</h2>
+      <p class="note">Pass rate says whether it got there. These say how: did it pick the right tools, avoid errors, stop wasting calls, answer without being nudged.</p>
+      <div class="scroll" id="score"></div>
+    </section>
+
+    <section class="card" style="order:9" aria-labelledby="h-why">
+      <h2 id="h-why">Why runs failed or raised flags</h2>
+      <p class="note">Counts of runs per reason. "Blocking" reasons fail a run. "Flags" don't fail it, but are worth knowing (for example, a tool call that errored).</p>
+      <div class="scroll" id="why"></div>
+    </section>
+
+    <section class="card" style="order:10" aria-labelledby="h-guide">
+      <h2 id="h-guide">How to read this</h2>
+      <details><summary>Metrics</summary>
+        <dl class="def" id="defs"></dl>
+      </details>
+      <details><summary>Limits to keep in mind</summary>
+        <ul>
+          <li>Each task is repeated only a few times, so a gap of one or two runs is noise. The whiskers show how big a gap needs to be.</li>
+          <li>The task set is small and mostly easy. Tasks everyone passes tell you nothing about which model is better.</li>
+          <li>The suite measures this agent's tools and prompts on small tasks. It is not a general benchmark of the models.</li>
+          <li>Runs that hit a rate limit or lost connection are retried, but a final infrastructure error still counts as a failed run.</li>
+          <li>Costs come from the token counts each provider reports, priced from <span class="mono">evals/pricing.json</span>. Costs marked <b>~</b> are estimates rebuilt from the saved transcripts: they cannot see hidden reasoning tokens (so reasoning models are undercounted) and assume no prompt caching (so providers that cache automatically are overcounted). Treat them as rough, and rely on reported figures from runs made after usage tracking was added.</li>
+        </ul>
+      </details>
+      <details><summary>Where the files are</summary>
+        <p class="note">This run's folder: <span class="mono" id="folder"></span></p>
+      </details>
+    </section>
+  </div>
+</main>
+<div id="tip" role="status"></div>
+<script type="application/json" id="data">__EVAL_DATA__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const DIMENSIONS = ["tool_selection", "args_valid", "efficiency", "outcome", "safety", "completed"];
+const DEFINITIONS = [
+  ["Pass rate", "Share of runs where the end state was right, nothing unsafe happened, and the run finished. This is the headline number."],
+  ["Tool selection", "Did it make the expected tool calls, in order? A different but valid route can score below 1 and still pass."],
+  ["Args valid", "Share of tool calls that did not come back as an error. Low means the model misuses its tools."],
+  ["Efficiency", "1.0 means it used no more tool calls than the task needs. Lower means it wandered."],
+  ["Nudges per run", "How often the harness had to prompt a model that stopped without an answer. Zero is best."],
+  ["Seconds per run", "Average wall-clock time. Local models on a small GPU are far slower than hosted ones."],
+  ["Cost per run", "Average dollars one run of a task cost: every model call in the run, each re-sending the conversation so far, priced from evals/pricing.json. Local models are free."],
+  ["Cost per passing run", "Total spend divided by the runs that passed. A cheap model that fails often can cost more per success than a dearer one that doesn't."],
+  ["~ (estimated)", "No usage was recorded for this run (it predates cost tracking, or the provider reports none), so tokens were estimated from the transcript at about 4 characters each. Rough, and it cannot see hidden reasoning."],
+  ["95% interval", "The range the true pass rate plausibly lies in, given how few runs there are (Wilson score)."],
+];
+const state = { providers: null, category: "all", tables: false, drill: null, axis: "speed" };
+
+// ---------------------------------------------------------------- helpers
+const $ = (id) => document.getElementById(id);
+function h(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, "");
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return n;
+}
+function put(node, ...kids) { node.replaceChildren(...kids.flat().filter((k) => k != null)); }
+const NS = "http://www.w3.org/2000/svg";
+function s(tag, props, ...kids) {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v != null && v !== false) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid) n.append(kid);
+  return n;
+}
+const pct = (x) => `${Math.round(x * 100)}%`;
+const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+function wilson(passed, n) {
+  if (!n) return [0, 0];
+  const z = 1.96, p = passed / n, d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d, m = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+  return [Math.max(0, c - m), Math.min(1, c + m)];
+}
+function isDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+function providerGroup(p) { return p === "openai" ? "OpenAI" : p === "anthropic" ? "Anthropic" : p === "google" ? "Google" : "Local"; }
+function providerColor(p) { return p === "openai" ? "var(--s1)" : p === "anthropic" ? "var(--s2)" : p === "google" ? "var(--s4)" : "var(--s3)"; }
+function seqColor(v) { return cssVar(`--seq-${Math.max(0, Math.min(6, Math.round(v * 6)))}`); }
+function seqTextColor(v) {
+  const idx = Math.round(Math.max(0, Math.min(1, v)) * 6);
+  const lightFill = isDark() ? idx >= 4 : idx <= 2;
+  return lightFill ? "#0b0b0b" : "#ffffff";
+}
+function usd(v) {
+  if (v == null) return "n/a";
+  if (v === 0) return "$0";
+  if (v < 0.01) return `$${v.toFixed(4)}`;
+  if (v < 1) return `$${v.toFixed(3)}`;
+  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function tok(n) {
+  if (n == null) return "n/a";
+  if (n < 1000) return String(Math.round(n));
+  return n < 1e6 ? `${(n / 1000).toFixed(1)}k` : `${(n / 1e6).toFixed(2)}M`;
+}
+// billed output tokens: some providers count thinking tokens only in total_tokens (same rule as evals/cost.py)
+const outTok = (u) => (u ? Math.max(u.completion_tokens || 0, (u.total_tokens || 0) - (u.prompt_tokens || 0)) : 0);
+// a model's dollar figure as text: "free", "no price", or the amount (~ when it is an estimate)
+function money(c, v) { return c.free ? "free" : v == null ? "no price" : (c.est ? "~" : "") + usd(v); }
+function fmtDuration(sec) {
+  if (sec == null) return "";
+  if (sec < 90) return `${Math.round(sec)} s`;
+  const m = Math.floor(sec / 60);
+  return m < 60 ? `${m} min ${Math.round(sec % 60)} s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+const tip = $("tip");
+function showTip(evt, title, rows) {
+  tip.replaceChildren(h("b", { text: title }), ...rows.map((r) => h("div", { class: "row", text: r })));
+  tip.style.display = "block";
+  const pad = 14, w = tip.offsetWidth, hgt = tip.offsetHeight;
+  const x = evt.clientX != null && evt.clientX !== 0 ? evt.clientX : evt.target.getBoundingClientRect().right;
+  const y = evt.clientY != null && evt.clientY !== 0 ? evt.clientY : evt.target.getBoundingClientRect().top;
+  tip.style.left = Math.min(x + pad, innerWidth - w - 8) + "px";
+  tip.style.top = Math.min(y + pad, innerHeight - hgt - 8) + "px";
+}
+const hideTip = () => { tip.style.display = "none"; };
+function attachTip(node, title, rows, onClick) {
+  node.addEventListener("pointermove", (e) => showTip(e, title, rows));
+  node.addEventListener("pointerleave", hideTip);
+  node.addEventListener("focus", (e) => showTip(e, title, rows));
+  node.addEventListener("blur", hideTip);
+  if (onClick) {
+    node.addEventListener("click", onClick);
+    node.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); } });
+  }
+}
+
+// ---------------------------------------------------------------- data selection
+function allTaskIds() {
+  const ids = new Set();
+  DATA.results.forEach((r) => Object.keys(r.tasks).forEach((t) => ids.add(t)));
+  return [...ids];
+}
+const catOf = (tid) => (DATA.tasks[tid] || {}).category || "other";
+function visibleTasks() {
+  return allTaskIds().filter((t) => state.category === "all" || catOf(t) === state.category)
+    .sort((a, b) => (catOf(a) + a).localeCompare(catOf(b) + b));
+}
+function chosenResults() { return DATA.results.filter((r) => !state.providers || state.providers.has(r.meta.provider)); }
+// A run that died on an API error (bad key, unknown model, no workspace, rate limit...) measured nothing about the
+// model, so it is left out of every rate and listed separately instead of being counted as a failure.
+// (Keep this list in step with INFRA_RE in evals/runs.py.)
+const INFRA = /(APIConnectionError|APITimeoutError|RateLimitError|InternalServerError|AuthenticationError|PermissionDeniedError|NotFoundError|BadRequestError|UnprocessableEntityError|ServiceUnavailable|Overloaded)/;
+const isInfra = (run) => Boolean(run.error) && INFRA.test(run.error);
+function aggregate(r, taskIds) {
+  const every = taskIds.flatMap((t) => (r.tasks[t] ? r.tasks[t].runs.map((run) => ({ ...run, task: t })) : []));
+  const runs = every.filter((x) => !isInfra(x));
+  const errored = every.length - runs.length;
+  const passed = runs.filter((x) => x.passed).length;
+  const calls = runs.flatMap((x) => x.tool_calls);
+  const perTask = {};
+  taskIds.forEach((t) => {
+    const rr = r.tasks[t] ? r.tasks[t].runs.filter((x) => !isInfra(x)) : [];
+    perTask[t] = { n: rr.length, passed: rr.filter((x) => x.passed).length };
+  });
+  const dim = (d) => mean(runs.map((x) => (x.scores || {})[d] ?? 1));
+  const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+  const priced = runs.filter((x) => x.cost_usd != null), spent = sum(priced.map((x) => x.cost_usd));
+  const pricedPassed = priced.filter((x) => x.passed).length;
+  const cost = {
+    free: Boolean(((r.summary || {}).cost || {}).free), n: priced.length, total: priced.length ? spent : null,
+    perRun: priced.length ? spent / priced.length : null, perPass: priced.length && pricedPassed ? spent / pricedPassed : null,
+    tokIn: sum(runs.map((x) => (x.usage || {}).prompt_tokens || 0)), tokOut: sum(runs.map((x) => outTok(x.usage))),
+    est: runs.some((x) => x.usage && x.usage.source && !["reported", "none"].includes(x.usage.source)),
+    judge: sum(runs.map((x) => x.judge_cost_usd || 0)),
+  };
+  taskIds.forEach((t) => {
+    const rr = (r.tasks[t] ? r.tasks[t].runs : []).filter((x) => !isInfra(x) && x.cost_usd != null);
+    perTask[t].cost = rr.length ? mean(rr.map((x) => x.cost_usd)) : null;
+  });
+  return {
+    cost,
+    runs, errored, n: runs.length, passed, rate: runs.length ? passed / runs.length : 0, ci: wilson(passed, runs.length),
+    dur: mean(runs.map((x) => x.duration_s)), nudges: mean(runs.map((x) => (x.extra || {}).nudges || 0)),
+    callsPerRun: runs.length ? calls.length / runs.length : 0,
+    errorsPerRun: runs.length ? calls.filter((c) => !c.ok).length / runs.length : 0,
+    dims: Object.fromEntries(DIMENSIONS.map((d) => [d, dim(d)])), perTask,
+  };
+}
+function couldNotRun() {
+  const tids = allTaskIds();
+  return chosenResults().map((r) => ({ r, every: tids.flatMap((t) => (r.tasks[t] ? r.tasks[t].runs : [])) }))
+    .filter(({ every }) => every.length && every.every(isInfra))
+    .map(({ r, every }) => ({ label: `${r.meta.provider}:${r.meta.model}`, count: every.length, reason: every[0].error.replace(/\s+/g, " ").slice(0, 260) }))
+    .concat((DATA.run.not_run || []).map((n) => ({ label: n.model, count: 0, reason: n.reason })));
+}
+function entries() {
+  const tids = visibleTasks();
+  const rs = chosenResults();
+  const count = new Map();
+  rs.forEach((r) => count.set(r.meta.model, (count.get(r.meta.model) || 0) + 1));
+  return rs.map((r) => ({
+    r, provider: r.meta.provider,
+    label: count.get(r.meta.model) > 1 ? `${r.meta.model} (${r.meta.provider})` : r.meta.model,
+    agg: aggregate(r, tids),
+  })).filter((e) => e.agg.n > 0);
+}
+
+// ---------------------------------------------------------------- header and filters
+function renderHeader() {
+  const run = DATA.run;
+  const problems = couldNotRun().length;
+  // "complete" would mislead if some models never produced a scored run (older folders were never told)
+  const status = (run.status === "complete" && problems) ? "partial" : (run.status || "unknown");
+  const cls = status === "complete" ? "ok" : status === "failed" ? "bad" : "warn";
+  const icon = status === "complete" ? "✓" : status === "failed" ? "✗" : "⚠";
+  $("title").textContent = `Run of ${run.label}`;
+  $("back").href = DATA.indexHref || "../../index.html";
+  const tasks = (run.tasks || []).length, models = (run.targets || DATA.results.map((r) => `${r.meta.provider}:${r.meta.model}`)).length;
+  put($("meta"), h("span", { class: `badge ${cls}`, text: `${icon} ${status}` }),
+    [`${models} model(s) tried${problems ? `, ${problems} could not run` : ""}`, tasks ? `${tasks} task(s)` : null, run.repeats ? `${run.repeats} repeat(s) each` : null, run.git_sha ? `code ${run.git_sha}` : null,
+      run.kind ? `${run.kind === "migrated" ? "moved from older results" : run.kind + " run"}` : null,
+      run.started && run.finished && run.kind !== "migrated" ? `took ${fmtDuration((new Date(run.finished) - new Date(run.started)) / 1000)}` : null]
+      .filter(Boolean).join("  ·  "));
+  $("folder").textContent = run.folder || "";
+  document.title = `Eval run ${run.label}`;
+}
+function renderFilters() {
+  const box = $("filters");
+  const providers = [...new Set(DATA.results.map((r) => r.meta.provider))];
+  if (!state.providers) state.providers = new Set(providers);
+  const cats = ["all", ...new Set(allTaskIds().map(catOf))];
+  const sel = h("select", { "aria-label": "Task category", onchange: (e) => { state.category = e.target.value; state.drill = null; render(); } },
+    ...cats.map((c) => h("option", { value: c, text: c === "all" ? "All task types" : c, selected: c === state.category })));
+  put(box,
+    providers.length > 1 ? h("span", { class: "sub" }, "Providers: ") : null,
+    ...(providers.length > 1 ? providers.map((p) => h("label", {}, h("input", { type: "checkbox", checked: state.providers.has(p), onchange: (e) => { e.target.checked ? state.providers.add(p) : state.providers.delete(p); state.drill = null; render(); } }), ` ${providerGroup(p) === "Local" ? p : providerGroup(p)}`)) : []),
+    h("label", {}, "Tasks: ", sel),
+    h("label", {}, h("input", { type: "checkbox", checked: state.tables, onchange: (e) => { state.tables = e.target.checked; render(); } }), " Show charts as tables"));
+}
+
+// ---------------------------------------------------------------- findings, banner, tiles
+function renderFindings(es, tids) {
+  const out = [];
+  if (!es.length) return [h("li", { text: "Nothing was measured for the current filters." })];
+  const sorted = [...es].sort((a, b) => b.agg.rate - a.agg.rate || a.agg.dur - b.agg.dur);
+  const top = sorted[0];
+  const tied = sorted.slice(1).filter((e) => e.agg.ci[1] >= top.agg.ci[0]);
+  out.push(`${top.label} has the highest pass rate: ${pct(top.agg.rate)} (${top.agg.passed} of ${top.agg.n} runs). ` +
+    (tied.length ? `Its 95% interval overlaps with ${tied.map((e) => e.label).join(", ")}, so these data cannot show it is better than them.`
+      : sorted.length > 1 ? "No other model's interval overlaps with it, so the gap is probably real." : ""));
+  const info = tids.map((t) => {
+    const rates = es.filter((e) => e.agg.perTask[t] && e.agg.perTask[t].n).map((e) => e.agg.perTask[t].passed / e.agg.perTask[t].n);
+    return { t, min: Math.min(...rates), max: Math.max(...rates), k: rates.length };
+  }).filter((x) => x.k);
+  const everyone = info.filter((x) => x.min === 1), nobody = info.filter((x) => x.max === 0);
+  const mixed = info.filter((x) => x.min < x.max); // models disagree: the informative tasks
+  const sameShaky = info.filter((x) => x.min === x.max && x.min > 0 && x.min < 1); // every model equally inconsistent
+  if (es.length > 1 && everyone.length)
+    out.push(`${everyone.length} of ${info.length} tasks were passed on every run by every model, so they do not help tell models apart: ${everyone.map((x) => x.t).join(", ")}.`);
+  if (mixed.length) out.push(`Tasks where models differed (the informative ones): ${mixed.map((x) => x.t).join(", ")}.`);
+  if (sameShaky.length) out.push(`Tasks every model passed only some of the time, at the same rate (hard or flaky, but not separating models): ${sameShaky.map((x) => x.t).join(", ")}.`);
+  if (nobody.length) out.push(`No model passed any run of: ${nobody.map((x) => x.t).join(", ")}. Check whether the task is too hard or broken.`);
+  const unsafe = es.filter((e) => e.agg.dims.safety < 1);
+  if (unsafe.length) out.push(`Safety failures (e.g. exposing a protected file): ${unsafe.map((e) => `${e.label} (${Math.round((1 - e.agg.dims.safety) * e.agg.n)} runs)`).join(", ")}.`);
+  const flaky = [];
+  es.forEach((e) => tids.forEach((t) => { const p = e.agg.perTask[t]; if (p && p.n && p.passed > 0 && p.passed < p.n) flaky.push(`${e.label} on ${t} (${p.passed}/${p.n})`); }));
+  if (flaky.length) out.push(`Inconsistent results (passed some runs but not all): ${flaky.slice(0, 6).join("; ")}${flaky.length > 6 ? `; and ${flaky.length - 6} more` : ""}.`);
+  const byDur = [...es].sort((a, b) => a.agg.dur - b.agg.dur);
+  if (byDur.length > 1 && byDur[byDur.length - 1].agg.dur / Math.max(0.1, byDur[0].agg.dur) >= 3)
+    out.push(`${byDur[0].label} averages ${byDur[0].agg.dur.toFixed(1)} s per run versus ${byDur[byDur.length - 1].agg.dur.toFixed(1)} s for ${byDur[byDur.length - 1].label}.`);
+  const paid = es.filter((e) => !e.agg.cost.free && e.agg.cost.perRun != null);
+  if (paid.length > 1) {
+    const byRun = [...paid].sort((a, b) => a.agg.cost.perRun - b.agg.cost.perRun);
+    const lo = byRun[0], hi = byRun[byRun.length - 1];
+    out.push(`Cost per run: ${lo.label} is cheapest at ${money(lo.agg.cost, lo.agg.cost.perRun)}; ${hi.label} is the most expensive at ${money(hi.agg.cost, hi.agg.cost.perRun)}` +
+      (lo.agg.cost.perRun > 0 ? ` (${(hi.agg.cost.perRun / lo.agg.cost.perRun).toFixed(1)}x).` : "."));
+    const value = paid.filter((e) => e.agg.cost.perPass != null).sort((a, b) => a.agg.cost.perPass - b.agg.cost.perPass);
+    if (value.length) out.push(`Best value, the lowest cost per passing run: ${value[0].label} at ${money(value[0].agg.cost, value[0].agg.cost.perPass)}` +
+      (value[0].label !== lo.label ? ` (cheapest per run is ${lo.label}, but it passes less often).` : "."));
+  } else if (paid.length === 1) {
+    out.push(`${paid[0].label} cost ${money(paid[0].agg.cost, paid[0].agg.cost.perRun)} per run.`);
+  }
+  const noPrice = es.filter((e) => !e.agg.cost.free && e.agg.cost.perRun == null);
+  if (noPrice.length) out.push(`No price is listed for ${noPrice.map((e) => e.label).join(", ")}, so there is no dollar figure. Add it to evals/pricing.json.`);
+  if (es.some((e) => e.agg.cost.est && !e.agg.cost.free)) out.push("Costs marked ~ are estimates rebuilt from transcripts (see \"Limits to keep in mind\"). Runs made from now on record the provider's real token counts.");
+  const partial = es.filter((e) => e.agg.errored > 0);
+  if (partial.length) out.push(`Some runs ended in API errors and were left out of the pass rate: ${partial.map((e) => `${e.label} (${e.agg.errored})`).join(", ")}.`);
+  const incomplete = es.filter((e) => e.r.meta.aborted);
+  if (incomplete.length) out.push(`Incomplete (stopped early on a permanent error): ${incomplete.map((e) => `${e.label}: ${e.r.meta.aborted.slice(0, 90)}`).join("; ")}.`);
+  const reps = mean(es.map((e) => e.r.meta.repeats || 1));
+  out.push(`Each task was run about ${reps.toFixed(0)} time(s) per model, so treat gaps smaller than about 10 percentage points as noise.`);
+  return out.map((t) => h("li", { text: t }));
+}
+function renderBanner(es) {
+  const bad = couldNotRun(), box = $("banner");
+  box.hidden = !bad.length;
+  box.style.order = es.length ? 3 : 0; // if nothing was measured, the problem is the headline
+  if (!bad.length) return;
+  put(box, h("h2", { text: "Could not run" }),
+    h("p", { class: "note", text: "These models produced no scored runs: every request ended in an API error, or the harness stopped before running them. They are left out of the charts (they would otherwise show as a misleading 0%). Fix the cause and run them again." }),
+    h("ul", { class: "findings" }, ...bad.map((b) => h("li", {}, h("b", { text: b.label }), b.count ? ` (${b.count} runs): ${b.reason}` : `: ${b.reason}`))));
+}
+function renderKpis(es, tids) {
+  const sorted = [...es].sort((a, b) => b.agg.rate - a.agg.rate);
+  const top = sorted[0];
+  const runs = es.reduce((a, e) => a + e.agg.n, 0);
+  const sep = tids.filter((t) => {
+    const rates = es.filter((e) => e.agg.perTask[t] && e.agg.perTask[t].n).map((e) => e.agg.perTask[t].passed / e.agg.perTask[t].n);
+    return rates.length > 1 && Math.min(...rates) < Math.max(...rates);
+  }).length;
+  put($("kpis"),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Top pass rate" }), h("div", { class: "hero", text: top ? pct(top.agg.rate) : "n/a" }), h("div", { class: "foot", text: top ? top.label : "No model produced a scored run" })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Models compared" }), h("div", { class: "value", text: es.length })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Runs scored" }), h("div", { class: "value", text: runs.toLocaleString() })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Tasks that separate models" }), h("div", { class: "value", text: `${sep} of ${tids.length}` })),
+    spendTile(es));
+}
+function spendTile(es) {
+  const paid = es.filter((e) => !e.agg.cost.free && e.agg.cost.total != null);
+  const total = paid.reduce((a, e) => a + e.agg.cost.total, 0) + es.reduce((a, e) => a + e.agg.cost.judge, 0);
+  const est = paid.some((e) => e.agg.cost.est), free = es.filter((e) => e.agg.cost.free).length;
+  const foot = paid.length
+    ? `${paid.length} paid model${paid.length > 1 ? "s" : ""}${est ? (paid.every((e) => e.agg.cost.est) ? ", estimated" : ", partly estimated") : ""}${free ? `, ${free} free` : ""}`
+    : free ? "all models ran locally" : "no prices listed";
+  return h("div", { class: "tile" }, h("div", { class: "label", text: "Spent on these runs" }),
+    h("div", { class: "value", text: paid.length ? `${est ? "~" : ""}${usd(total)}` : free ? "$0" : "n/a" }), h("div", { class: "foot", text: foot }));
+}
+
+// ---------------------------------------------------------------- leaderboard
+function legendFor(es, id) {
+  const groups = [...new Set(es.map((e) => providerGroup(e.provider)))];
+  const colorOf = { OpenAI: "var(--s1)", Anthropic: "var(--s2)", Google: "var(--s4)", Local: "var(--s3)" };
+  put($(id), ...groups.map((g) => h("span", {}, h("i", { style: `background:${colorOf[g]}` }), g)));
+}
+function tableFrom(cols, rows) {
+  return h("div", { class: "scroll" }, h("table", {},
+    h("thead", {}, h("tr", {}, ...cols.map((c) => h("th", { class: c.num ? "num" : "", text: c.label })))),
+    h("tbody", {}, ...rows.map((r) => h("tr", {}, ...cols.map((c, i) => h("td", { class: c.num ? "num" : "", text: r[i] })))))));
+}
+function openDrill(e, task) { state.drill = { entry: e.r.file, task }; renderDrill(true); }
+function renderLeaderboard(es) {
+  const sorted = [...es].sort((a, b) => b.agg.rate - a.agg.rate || a.agg.dur - b.agg.dur);
+  legendFor(es, "legend-lead");
+  const host = $("lead");
+  if (state.tables) {
+    put(host, tableFrom([{ label: "Model" }, { label: "Pass rate", num: 1 }, { label: "Passed / runs", num: 1 }, { label: "95% interval", num: 1 }],
+      sorted.map((e) => [e.label, pct(e.agg.rate), `${e.agg.passed}/${e.agg.n}`, `${pct(e.agg.ci[0])} to ${pct(e.agg.ci[1])}`])));
+    return;
+  }
+  const W = Math.max(320, host.clientWidth || 520), rowH = 34, left = Math.min(220, W * 0.38), right = 96, top = 22, H = top + sorted.length * rowH + 26;
+  const x = (v) => left + v * (W - left - right);
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Pass rate by model with 95% intervals" });
+  [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+    svg.append(s("line", { x1: x(v), x2: x(v), y1: top - 6, y2: H - 22, stroke: "var(--grid)", "stroke-width": 1 }));
+    svg.append(s("text", { x: x(v), y: H - 6, "text-anchor": "middle", class: "muted", text: pct(v) }));
+  });
+  sorted.forEach((e, i) => {
+    const y = top + i * rowH, cy = y + rowH / 2, bw = Math.max(0, x(e.agg.rate) - left), bh = 16, r = Math.min(4, bw);
+    const g = s("g", { class: "hit", tabindex: 0, role: "button", "aria-label": `${e.label}: ${pct(e.agg.rate)} passed. Show runs.` });
+    const name = e.label.length > 30 ? e.label.slice(0, 29) + "…" : e.label;
+    g.append(s("rect", { x: left, y: y, width: W - left, height: rowH, fill: "transparent" }));
+    g.append(s("text", { x: left - 10, y: cy + 4, "text-anchor": "end", class: "ink", text: name }));
+    if (bw > 0) g.append(s("path", { class: "lift", fill: providerColor(e.provider), d: `M${left},${cy - bh / 2} h${bw - r} a${r},${r} 0 0 1 ${r},${r} v${bh - 2 * r} a${r},${r} 0 0 1 -${r},${r} h-${bw - r} z` }));
+    g.append(s("line", { x1: x(e.agg.ci[0]), x2: x(e.agg.ci[1]), y1: cy, y2: cy, stroke: "var(--ink)", "stroke-width": 1.5, opacity: 0.7 }));
+    [e.agg.ci[0], e.agg.ci[1]].forEach((v) => g.append(s("line", { x1: x(v), x2: x(v), y1: cy - 5, y2: cy + 5, stroke: "var(--ink)", "stroke-width": 1.5, opacity: 0.7 })));
+    g.append(s("text", { x: W - right + 10, y: cy + 4, class: "ink", text: `${pct(e.agg.rate)}  ${e.agg.passed}/${e.agg.n}` }));
+    attachTip(g, e.label, [`${pct(e.agg.rate)} passed (${e.agg.passed} of ${e.agg.n} runs)`, `95% interval: ${pct(e.agg.ci[0])} to ${pct(e.agg.ci[1])}`, `${e.agg.dur.toFixed(1)} s per run`, "Click for run details"], () => openDrill(e, null));
+    svg.append(g);
+  });
+  put(host, svg);
+}
+
+// ---------------------------------------------------------------- quality vs speed (or cost)
+function renderSpeed(es) {
+  legendFor(es, "legend-speed");
+  const host = $("speed");
+  const costable = es.filter((e) => e.agg.cost.perRun > 0); // free models have no point on a log cost axis
+  const byCost = state.axis === "cost" && costable.length > 0;
+  put($("axis-pick"), h("label", {}, "Compare quality against: ", h("select", { "aria-label": "Horizontal axis", onchange: (e) => { state.axis = e.target.value; render(); } },
+    h("option", { value: "speed", text: "Speed (seconds per run)", selected: !byCost }),
+    h("option", { value: "cost", text: "Cost (dollars per run)", selected: byCost, disabled: !costable.length }))));
+  const hiddenFree = es.length - costable.length;
+  $("speed-note").textContent = byCost
+    ? `Up is better quality, left is cheaper (log scale). Hover a point for details.${hiddenFree ? ` ${hiddenFree} model${hiddenFree > 1 ? "s" : ""} with no price or running locally ${hiddenFree > 1 ? "are" : "is"} left off.` : ""}`
+    : "Up is better quality, left is faster (log scale). Hover a point for details.";
+  const pts = byCost ? costable : es;
+  const val = (e) => (byCost ? e.agg.cost.perRun : e.agg.dur);
+  const floor = byCost ? 1e-6 : 0.1;
+  const showVal = (e) => (byCost ? money(e.agg.cost, e.agg.cost.perRun) : `${e.agg.dur.toFixed(1)} s`);
+  if (state.tables) {
+    put(host, tableFrom([{ label: "Model" }, { label: byCost ? "Cost per run" : "Seconds per run", num: 1 }, { label: "Pass rate", num: 1 }],
+      [...pts].sort((a, b) => val(a) - val(b)).map((e) => [e.label, byCost ? showVal(e) : e.agg.dur.toFixed(1), pct(e.agg.rate)])));
+    return;
+  }
+  if (!pts.length) { put(host, h("div", { class: "empty", text: "Nothing to plot." })); return; }
+  const W = Math.max(320, host.clientWidth || 520), H = 300, L = 48, R = 18, T = 14, B = 40;
+  const vals = pts.map((e) => Math.max(floor, val(e)));
+  const lo = Math.log10(Math.min(...vals) / 1.6), hi = Math.log10(Math.max(...vals) * 1.6);
+  const x = (d) => L + ((Math.log10(Math.max(floor, d)) - lo) / Math.max(0.01, hi - lo)) * (W - L - R);
+  const y = (v) => T + (1 - v) * (H - T - B);
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": byCost ? "Quality versus cost" : "Quality versus speed" });
+  [0, 0.25, 0.5, 0.75, 1].forEach((v) => {
+    svg.append(s("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--grid)" }));
+    svg.append(s("text", { x: L - 8, y: y(v) + 4, "text-anchor": "end", class: "muted", text: pct(v) }));
+  });
+  const ticks = byCost ? [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1, 3, 10] : [0.5, 1, 2, 5, 10, 20, 50, 100, 200];
+  ticks.filter((t) => Math.log10(t) >= lo && Math.log10(t) <= hi).forEach((t) => {
+    svg.append(s("line", { x1: x(t), x2: x(t), y1: H - B, y2: H - B + 4, stroke: "var(--axis)" }));
+    svg.append(s("text", { x: x(t), y: H - B + 17, "text-anchor": "middle", class: "muted", text: byCost ? usd(t) : `${t}s` }));
+  });
+  svg.append(s("line", { x1: L, x2: W - R, y1: H - B, y2: H - B, stroke: "var(--axis)" }));
+  svg.append(s("text", { x: (L + W - R) / 2, y: H - 4, "text-anchor": "middle", text: byCost ? "Dollars per run (log scale), cheaper is left" : "Seconds per run (log scale), faster is left" }));
+  const placed = [];
+  const place = (cx, cy, text) => {
+    const w = text.length * 6.6;
+    for (const [dx, dy, anchor] of [[10, 4, "start"], [10, -10, "start"], [10, 18, "start"], [-10, 4, "end"], [-10, -10, "end"], [-10, 18, "end"]]) {
+      const x0 = anchor === "start" ? cx + dx : cx + dx - w, box = [x0, cy + dy - 11, x0 + w, cy + dy + 3];
+      const fits = box[0] >= L - 6 && box[2] <= W - 4;
+      if (fits && !placed.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) { placed.push(box); return { x: cx + dx, y: cy + dy, anchor }; }
+    }
+    return null; // no free spot: the tooltip and the table view carry it
+  };
+  const labelPos = new Map();
+  [...pts].sort((a, b) => b.agg.rate - a.agg.rate || val(a) - val(b)).slice(0, 4).forEach((e) => {
+    const text = e.label.length > 22 ? e.label.slice(0, 21) + "…" : e.label;
+    const p = place(x(val(e)), y(e.agg.rate), text);
+    if (p) labelPos.set(e.r.file, { ...p, text });
+  });
+  pts.forEach((e) => {
+    const cx = x(val(e)), cy = y(e.agg.rate);
+    const g = s("g", { class: "hit", tabindex: 0, role: "button", "aria-label": `${e.label}: ${pct(e.agg.rate)} at ${showVal(e)} per run` });
+    g.append(s("circle", { cx, cy, r: 16, fill: "transparent" })); // 32px hit target
+    g.append(s("circle", { class: "lift", cx, cy, r: 6, fill: providerColor(e.provider), stroke: "var(--surface)", "stroke-width": 2 }));
+    const lp = labelPos.get(e.r.file);
+    if (lp) g.append(s("text", { x: lp.x, y: lp.y, "text-anchor": lp.anchor, class: "ink", text: lp.text }));
+    attachTip(g, e.label, [`${pct(e.agg.rate)} passed`, `${e.agg.dur.toFixed(1)} s per run`, `${money(e.agg.cost, e.agg.cost.perRun)} per run`, `${e.agg.n} runs`, "Click for run details"], () => openDrill(e, null));
+    svg.append(g);
+  });
+  put(host, svg);
+}
+
+// ---------------------------------------------------------------- cost
+function renderCost(es, tids) {
+  const note = $("cost-note");
+  if (!es.length) { put($("cost"), h("div", { class: "empty", text: "Nothing to show." })); put($("cost-tasks")); return; }
+  const rank = (e) => (e.agg.cost.free ? -1 : e.agg.cost.perRun == null ? Infinity : e.agg.cost.perRun);
+  const sorted = [...es].sort((a, b) => rank(a) - rank(b));
+  const top = Math.max(0, ...es.map((e) => e.agg.cost.perRun || 0));
+  const anyEst = es.some((e) => e.agg.cost.est && !e.agg.cost.free);
+  note.textContent = "Cheapest first. Cost per run is every model call in a run, priced from evals/pricing.json. Cost per passing run divides the total by the runs that passed, so a model that is cheap but unreliable shows up here." +
+    (anyEst ? " ~ marks an estimate rebuilt from the saved transcript: rough, and blind to hidden reasoning tokens." : "");
+  const basis = (e) => (e.agg.cost.free ? "local model" : e.agg.cost.perRun == null ? "no price in pricing.json" : e.agg.cost.est ? "estimated from transcripts" : "reported by provider");
+  const cols = ["Model", "Cost per run", "Cost per passing run", "Pass rate", "Total for these runs", "Tokens per run (in / out)", "Basis"];
+  const nRuns = (e) => Math.max(1, e.agg.n);
+  const rows = sorted.map((e) => h("tr", {},
+    h("td", { text: e.label }),
+    h("td", { class: "num" }, money(e.agg.cost, e.agg.cost.perRun),
+      e.agg.cost.perRun > 0 && top > 0 ? h("span", { class: "bar", style: `width:${Math.max(2, Math.round((e.agg.cost.perRun / top) * 90))}px` }) : null),
+    h("td", { class: "num", text: e.agg.cost.free ? "free" : e.agg.cost.perPass == null ? (e.agg.cost.perRun == null ? "no price" : "none passed") : money(e.agg.cost, e.agg.cost.perPass) }),
+    h("td", { class: "num", text: pct(e.agg.rate) }),
+    h("td", { class: "num", text: e.agg.cost.free ? "free" : money(e.agg.cost, e.agg.cost.total) }),
+    h("td", { class: "num", text: `${tok(e.agg.cost.tokIn / nRuns(e))} / ${tok(e.agg.cost.tokOut / nRuns(e))}` }),
+    h("td", { class: "dim", text: basis(e) })));
+  put($("cost"), h("table", {}, h("thead", {}, h("tr", {}, ...cols.map((c, i) => h("th", { class: i && i < 6 ? "num" : "", text: c })))), h("tbody", {}, ...rows)));
+
+  // per task: mean cost of one run on each model
+  const taskRows = tids.map((t) => {
+    const per = sorted.map((e) => (e.agg.perTask[t] && e.agg.perTask[t].n ? e.agg.perTask[t].cost : null));
+    const priced = per.filter((v, i) => v != null && !sorted[i].agg.cost.free);
+    const best = priced.length > 1 ? Math.min(...priced) : null;
+    const avg = priced.length ? priced.reduce((a, b) => a + b, 0) / priced.length : null;
+    return h("tr", {}, h("td", { text: t }), h("td", { class: "dim", text: catOf(t) }),
+      ...per.map((v, i) => h("td", { class: `num${v != null && best != null && v === best && !sorted[i].agg.cost.free ? " cheap" : ""}`,
+        text: sorted[i].agg.cost.free ? "free" : v == null ? "-" : money(sorted[i].agg.cost, v) })),
+      h("td", { class: "num dim", text: avg == null ? "-" : usd(avg) }));
+  });
+  const head = ["Task", "Type", ...sorted.map((e) => (e.label.length > 18 ? e.label.slice(0, 17) + "…" : e.label)), "Average"];
+  put($("cost-tasks"), h("table", {}, h("thead", {}, h("tr", {}, ...head.map((c, i) => h("th", { class: i > 1 ? "num" : "", text: c, title: i > 1 && i < head.length - 1 ? sorted[i - 2].label : "" })))), h("tbody", {}, ...taskRows)));
+}
+
+// ---------------------------------------------------------------- heatmap
+function renderHeat(es, tids) {
+  const host = $("heat");
+  if (!es.length || !tids.length) { put(host, h("div", { class: "empty", text: "Nothing to show." })); return; }
+  const spread = (t) => {
+    const rates = es.filter((e) => e.agg.perTask[t].n).map((e) => e.agg.perTask[t].passed / e.agg.perTask[t].n);
+    if (!rates.length) return "none";
+    return Math.min(...rates) === 1 ? "all pass" : Math.max(...rates) === 0 ? "none pass" : Math.min(...rates) === Math.max(...rates) ? "same" : "mixed";
+  };
+  if (state.tables) {
+    put(host, tableFrom([{ label: "Task" }, { label: "Type" }, ...es.map((e) => ({ label: e.label, num: 1 })), { label: "Spread" }],
+      tids.map((t) => [t, catOf(t), ...es.map((e) => { const p = e.agg.perTask[t]; return p.n ? `${p.passed}/${p.n}` : "-"; }), spread(t)])));
+    return;
+  }
+  const cw = 64, ch = 34, left = 250, top = 118, right = 96, W = left + es.length * cw + right, H = top + tids.length * ch + 10;
+  const svg = s("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Pass counts per task and model" });
+  es.forEach((e, i) => {
+    const cx = left + i * cw + cw / 2;
+    const label = e.label.length > 26 ? e.label.slice(0, 25) + "…" : e.label;
+    svg.append(s("rect", { x: cx - 5, y: top - 14, width: 10, height: 4, rx: 2, fill: providerColor(e.provider) }));
+    svg.append(s("text", { x: cx, y: top - 20, transform: `rotate(-40 ${cx} ${top - 20})`, "text-anchor": "start", class: "ink", text: label }));
+  });
+  svg.append(s("text", { x: left + es.length * cw + 12, y: top - 20, text: "Spread" }));
+  let lastCat = "";
+  tids.forEach((t, row) => {
+    const y = top + row * ch, cat = catOf(t);
+    svg.append(s("text", { x: left - 12, y: y + ch / 2 + 4, "text-anchor": "end", class: "ink", text: t }));
+    if (cat !== lastCat) { svg.append(s("text", { x: 4, y: y + ch / 2 + 4, class: "muted", text: cat })); lastCat = cat; }
+    es.forEach((e, i) => {
+      const p = e.agg.perTask[t], v = p.n ? p.passed / p.n : null, cx = left + i * cw;
+      const g = s("g", { class: "hit", tabindex: 0, role: "button", "aria-label": `${e.label} on ${t}: ${p.passed} of ${p.n} passed` });
+      g.append(s("rect", { class: "lift", x: cx + 1, y: y + 1, width: cw - 2, height: ch - 2, rx: 4, fill: v == null ? "transparent" : seqColor(v), stroke: v == null ? "var(--grid)" : "none" }));
+      g.append(s("text", { x: cx + cw / 2, y: y + ch / 2 + 4, "text-anchor": "middle", style: `fill:${v == null ? "var(--muted)" : seqTextColor(v)};font-weight:600`, text: p.n ? `${p.passed}/${p.n}` : "-" }));
+      attachTip(g, `${e.label}`, [t, p.n ? `${p.passed} of ${p.n} runs passed (${pct(v)})` : "not run", (DATA.tasks[t] || {}).description || "", "Click for run details"], () => openDrill(e, t));
+      svg.append(g);
+    });
+    const sp = spread(t);
+    svg.append(s("text", { x: left + es.length * cw + 12, y: y + ch / 2 + 4, class: sp === "mixed" ? "ink" : "muted", style: sp === "mixed" ? "font-weight:600" : "", text: sp }));
+  });
+  put(host, svg);
+}
+
+// ---------------------------------------------------------------- drill-down
+function renderDrill(scroll) {
+  const body = $("drill-body");
+  if (!state.drill) { put(body); $("drill-note").hidden = false; return; }
+  const r = DATA.results.find((x) => x.file === state.drill.entry);
+  if (!r) { put(body); return; }
+  $("drill-note").hidden = true;
+  const tids = (state.drill.task ? [state.drill.task] : visibleTasks()).filter((t) => r.tasks[t]);
+  const head = h("div", {}, h("b", { text: `${r.meta.provider}:${r.meta.model}` }),
+    h("span", { class: "sub", text: state.drill.task ? "" : "   (all tasks; click a heatmap cell to focus one)" }),
+    " ", h("button", { class: "btn", type: "button", text: "Close", onclick: () => { state.drill = null; renderDrill(); } }));
+  const blocks = tids.map((t) => {
+    const runs = r.tasks[t].runs, meta = DATA.tasks[t] || {};
+    const passed = runs.filter((x) => x.passed).length;
+    return h("div", {}, h("h2", { style: "margin-top:14px", text: `${t}   ${passed}/${runs.length} passed` }),
+      h("p", { class: "note", text: meta.description || "" }),
+      meta.prompt ? h("details", {}, h("summary", { text: "Prompt given to the model" }), h("pre", { text: meta.prompt })) : null,
+      ...runs.map((run, i) => runCard(run, i, r)));
+  });
+  const none = tids.length ? null : h("p", { class: "note", text: `This result did not run ${state.drill.task || "any of the selected tasks"}.` });
+  put(body, head, none, ...blocks);
+  if (scroll) $("drill").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function runCard(run, i, r) {
+  const u = run.usage, free = Boolean(((r.summary || {}).cost || {}).free);
+  const spend = u && u.source !== "none"
+    ? ` · ${u.source === "estimated" ? "~" : ""}${tok(u.prompt_tokens)} in / ${tok(outTok(u))} out${free ? " · free" : run.cost_usd != null ? ` · ${u.source === "estimated" ? "~" : ""}${usd(run.cost_usd)}` : ""}`
+    : "";
+  const chips = DIMENSIONS.map((d) => { const v = (run.scores || {})[d]; return v == null ? null : h("span", { class: `chip${v < 1 ? " low" : ""}`, text: `${d.replace("_", " ")} ${f2(v)}` }); });
+  const calls = run.tool_calls.length
+    ? h("ul", { class: "calls" }, ...run.tool_calls.map((c, n) => h("li", { class: c.ok ? "ok" : "err" }, `${n + 1}. ${c.ok ? "✓ ok " : "✗ ERR"} ${c.name} ${JSON.stringify(c.arguments).slice(0, 160)}`)))
+    : h("p", { class: "note", text: "No tool calls." });
+  return h("div", { class: `run ${run.passed ? "pass" : "fail"}` },
+    h("h3", {}, h("span", { class: run.passed ? "pass-text" : "fail-text", text: run.passed ? "✓ PASS" : "✗ FAIL" }),
+      `   run ${i + 1} · ${run.duration_s.toFixed(1)} s · ${run.tool_calls.length} tool call(s)${(run.extra || {}).nudges ? ` · ${run.extra.nudges} nudge(s)` : ""}${(run.extra || {}).retries ? ` · ${run.extra.retries} retry` : ""}${spend}`),
+    h("div", { class: "chips" }, ...chips), calls,
+    h("div", { class: "note", text: "Answer" }), h("pre", { text: run.answer || "(empty)" }),
+    run.failures.length ? h("ul", { class: "fails" }, ...run.failures.map((f) => h("li", { text: f }))) : null);
+}
+
+// ---------------------------------------------------------------- scorecard and failures
+function renderScore(es) {
+  const sorted = [...es].sort((a, b) => b.agg.rate - a.agg.rate);
+  const cols = [
+    ["Model", (e) => e.label, null], ["Pass rate", (e) => pct(e.agg.rate), (e) => e.agg.rate],
+    ["Tool selection", (e) => f2(e.agg.dims.tool_selection), (e) => e.agg.dims.tool_selection],
+    ["Args valid", (e) => f2(e.agg.dims.args_valid), (e) => e.agg.dims.args_valid],
+    ["Efficiency", (e) => f2(e.agg.dims.efficiency), (e) => e.agg.dims.efficiency],
+    ["Nudges / run", (e) => e.agg.nudges.toFixed(1), null], ["Tool calls / run", (e) => e.agg.callsPerRun.toFixed(1), null],
+    ["Tool errors / run", (e) => e.agg.errorsPerRun.toFixed(2), null], ["Seconds / run", (e) => e.agg.dur.toFixed(1), null],
+    ["Cost / run", (e) => money(e.agg.cost, e.agg.cost.perRun), null],
+  ];
+  put($("score"), h("table", {},
+    h("thead", {}, h("tr", {}, ...cols.map(([t], i) => h("th", { class: i ? "num" : "", text: t })))),
+    h("tbody", {}, ...sorted.map((e) => h("tr", {}, ...cols.map(([, fmt, val], i) => {
+      const td = h("td", { class: i ? "num" : "", text: fmt(e) });
+      if (val) { const v = val(e); td.style.background = seqColor(v); td.style.color = seqTextColor(v); }
+      return td;
+    }))))));
+}
+const REASONS = [
+  ["Exposed protected data", /canary/, true], ["Used a forbidden tool", /forbidden tools/, true], ["Hidden tests failed", /hidden tests/, true],
+  ["Edited a file it should leave alone", /was modified but should|was deleted or moved/, true], ["Refactor goal not met", /appears \d+ times|is missing \(public/, true],
+  ["Its tests missed planted bugs", /planted bugs|fail on the correct implementation|was not created/, true], ["Wrong or ungrounded answer", /answer should match|answer must NOT/, true],
+  ["Code behaved wrongly", /behaviour check/, true], ["File content wrong", /expected to contain|expected NOT|file missing|expected to match/, true],
+  ["Judge rejected the answer", /judge score/, true], ["Did not finish (error, stop, or limit)", /did not finish cleanly|^\w*Error:/, true],
+  ["Flag: a tool call errored", /tool calls returned errors/, false], ["Flag: took a different route than expected", /tool selection/, false],
+  ["Flag: used more tool calls than needed", /tool calls, expected at most/, false],
+];
+function renderWhy(es) {
+  const counts = REASONS.map(([, re]) => es.map((e) => e.agg.runs.filter((r) => r.failures.some((f) => re.test(f))).length));
+  const other = es.map((e) => e.agg.runs.filter((r) => !r.passed && !r.failures.some((f) => REASONS.some(([, re, blocking]) => blocking && re.test(f)))).length);
+  const rows = REASONS.map(([label, , blocking], r) => ({ label, blocking, counts: counts[r] })).filter((r) => r.counts.some((c) => c > 0));
+  if (other.some((c) => c > 0)) rows.push({ label: "Failed for another reason", blocking: true, counts: other });
+  if (!rows.length) { put($("why"), h("div", { class: "empty", text: "No failures or flags in the selected runs." })); return; }
+  const cell = (c) => h("td", { class: "num", style: c ? "font-weight:600" : "color:var(--muted)", text: c ? String(c) : "·" });
+  put($("why"), h("table", {},
+    h("thead", {}, h("tr", {}, h("th", { text: "Reason" }), ...es.map((e) => h("th", { class: "num", text: e.label.length > 18 ? e.label.slice(0, 17) + "…" : e.label, title: e.label })))),
+    h("tbody", {}, ...rows.map((r) => h("tr", {}, h("td", { text: r.label }), ...r.counts.map(cell))))));
+}
+
+// ---------------------------------------------------------------- main
+function render() {
+  hideTip();
+  const es = entries(), tids = visibleTasks();
+  renderFilters();
+  renderBanner(es);
+  put($("findings"), ...renderFindings(es, tids));
+  renderKpis(es, tids);
+  renderLeaderboard(es);
+  renderSpeed(es);
+  renderCost(es, tids);
+  renderHeat(es, tids);
+  renderScore(es);
+  renderWhy(es);
+  renderDrill(false);
+}
+function init() {
+  renderHeader();
+  put($("defs"), ...DEFINITIONS.flatMap(([t, d]) => [h("dt", { text: t }), h("dd", { text: d })]));
+  try { const saved = localStorage.getItem("evalTheme"); if (saved) document.documentElement.setAttribute("data-theme", saved); } catch (e) {}
+  $("theme").addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("evalTheme", next); } catch (e) {}
+    render();
+  });
+  if (!DATA.results.length && !(DATA.run.not_run || []).length) { $("empty").hidden = false; $("app").hidden = true; return; }
+  render();
+  let timer = null;
+  addEventListener("resize", () => { clearTimeout(timer); timer = setTimeout(render, 120); });
+}
+init();
+</script>
+</body>
+</html>

@@ -1,2 +1,5 @@
 *.json
 traces/
+runs/
+index.html
+*.md

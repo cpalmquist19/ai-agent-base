@@ -23,6 +23,8 @@ class ChatPartial:
     tool_events: list[dict[str, Any]]
     activity: list[dict[str, Any]]
     segments: list[dict[str, Any]]
+    # Token usage summed over every model call so far this turn (see chat/usage.py); None before the first call.
+    usage: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)

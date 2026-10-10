@@ -21,7 +21,7 @@ def detect_model_id(client: OpenAI) -> str:
         raise RuntimeError(
             f"Could not connect to LM Studio at {LM_STUDIO_BASE_URL}. "
             "Start LM Studio and enable the local server, or set "
-            "LLM_PROVIDER=openai or LLM_PROVIDER=anthropic in your .env."
+            "LLM_PROVIDER=openai, anthropic, or google in your .env."
         ) from exc
     if not models.data:
         raise RuntimeError(

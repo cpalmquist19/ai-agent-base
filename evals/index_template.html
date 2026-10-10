@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval runs</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --border: rgba(11,11,11,.10); --wash: rgba(11,11,11,.05);
+  --s1: #2a78d6; --good-text: #006300; --bad-text: #a52a2a; --warn: #9a6a00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark; --page: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.06);
+    --s1: #3987e5; --good-text: #0ca30c; --bad-text: #ff7b7b; --warn: #fab219;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark; --page: #0d0d0d; --surface: #1a1a19; --ink: #fff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --border: rgba(255,255,255,.10); --wash: rgba(255,255,255,.06);
+  --s1: #3987e5; --good-text: #0ca30c; --bad-text: #ff7b7b; --warn: #fab219;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0; font-weight: 650; }
+h2 { font-size: 15px; margin: 0 0 4px; font-weight: 650; }
+a { color: var(--s1); }
+.sub { color: var(--ink-2); margin: 4px 0 0; }
+.note { color: var(--ink-2); font-size: 12.5px; margin: 0 0 10px; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+.kpis { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 760px) { .kpis { grid-template-columns: 1fr 1fr; } }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; }
+.tile .label { color: var(--ink-2); font-size: 12.5px; }
+.tile .value { font-size: 28px; font-weight: 650; margin-top: 2px; }
+.tile .hero { font-size: 38px; line-height: 1.1; font-weight: 650; }
+.tile .foot { color: var(--ink-2); font-size: 12.5px; margin-top: 2px; }
+select, .btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 5px 9px; }
+.btn { cursor: pointer; } .btn:hover { background: var(--wash); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; font-size: 12px; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+tr.row { cursor: pointer; }
+tr.row:hover td, tr.row:focus td { background: var(--wash); }
+tr.row:focus { outline: none; }
+tr.row:focus-visible td:first-child { box-shadow: inset 3px 0 0 var(--s1); }
+.when { font-weight: 600; white-space: nowrap; }
+.big { font-size: 16px; font-weight: 650; }
+.chip { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); margin: 0 4px 3px 0; white-space: nowrap; }
+.chip.bad { color: var(--bad-text); } .chip.warn { color: var(--warn); } .chip.ok { color: var(--good-text); }
+.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.empty { color: var(--ink-2); padding: 24px 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 10px; }
+.filters label { font-size: 13px; color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Eval runs</h1>
+      <p class="sub" id="gen"></p>
+    </div>
+    <button class="btn" id="theme" type="button" aria-label="Toggle light or dark theme">Theme</button>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card" aria-labelledby="h-runs">
+    <h2 id="h-runs">All runs, newest first</h2>
+    <p class="note">Times are local. <b>Click a row</b> to open that run's full report: findings, charts, and every prompt, tool call and answer.</p>
+    <div class="scroll" id="runs"></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-cmp">
+    <h2 id="h-cmp">Compare two runs</h2>
+    <p class="note">Pick an earlier and a later run, for example before and after a fix. Changes smaller than about 10 percentage points are within the noise at these sample sizes.</p>
+    <div id="cmp"></div>
+  </section>
+</main>
+<script type="application/json" id="data">__EVAL_DATA__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("data").textContent);
+const $ = (id) => document.getElementById(id);
+function h(tag, props, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") n.className = v;
+    else if (k === "text") n.textContent = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v === true) n.setAttribute(k, "");
+    else if (v !== false && v != null) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return n;
+}
+function put(node, ...kids) { node.replaceChildren(...kids.flat().filter((k) => k != null)); }
+const pct = (x) => `${Math.round(x * 100)}%`;
+const key = (m) => `${m.provider}:${m.model}`;
+const runsDesc = () => [...DATA.runs].sort((a, b) => (a.id < b.id ? 1 : -1));
+function fmtDuration(sec) {
+  if (sec == null) return "n/a";
+  if (sec < 90) return `${Math.round(sec)} s`;
+  const m = Math.floor(sec / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+const rate = (m) => (m.n ? m.passed / m.n : 0);
+function usd(v) {
+  if (v == null) return "n/a";
+  if (v === 0) return "$0";
+  if (v < 0.01) return `$${v.toFixed(4)}`;
+  if (v < 1) return `$${v.toFixed(3)}`;
+  return `$${v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+const guess = (m) => ["estimated", "partial", "mixed"].includes(m.cost_source);
+// one model's cost per run as text: free, no price, or the amount (~ when estimated)
+const perRunText = (m) => (m.free ? "free" : m.cost_per_run == null ? "no price" : (guess(m) ? "~" : "") + usd(m.cost_per_run));
+// what a whole run spent: paid models only, with a note when some had no price
+function spendText(run) {
+  if (run.cost_usd == null) return run.models.some((m) => m.free) && !run.cost_unpriced ? "free" : "n/a";
+  return (run.cost_estimated ? "~" : "") + usd(run.cost_usd);
+}
+const scored = (run) => run.models.filter((m) => m.n > 0);
+function bestModel(run) {
+  return [...scored(run)].sort((a, b) => rate(b) - rate(a) || a.seconds - b.seconds)[0];
+}
+function attention(run) {
+  const chips = [];
+  const notRun = run.not_run.length + run.models.filter((m) => m.n === 0).length;
+  if (notRun) chips.push(["bad", `✗ ${notRun} could not run`]);
+  const safety = run.models.filter((m) => m.safety_failures > 0).length;
+  if (safety) chips.push(["bad", `✗ safety: ${safety} model${safety > 1 ? "s" : ""}`]);
+  const incomplete = run.models.filter((m) => m.aborted).length;
+  if (incomplete) chips.push(["warn", `⚠ ${incomplete} incomplete`]);
+  const errored = run.models.reduce((a, m) => a + m.errored, 0);
+  if (errored && !notRun) chips.push(["warn", `⚠ ${errored} API-error runs left out`]);
+  if (run.status === "interrupted") chips.push(["warn", "⚠ interrupted"]);
+  if (run.status === "running") chips.push(["warn", "⚠ still running or stopped early"]);
+  return chips;
+}
+function openRun(run) { location.href = run.href; }
+
+function renderKpis() {
+  const runs = runsDesc(), latest = runs[0];
+  const t = latest && bestModel(latest);
+  put($("kpis"),
+    h("div", { class: "tile" }, h("div", { class: "label", text: latest ? `Latest run: ${latest.label}` : "No runs yet" }),
+      h("div", { class: "hero", text: t ? `${pct(rate(t))}  ${t.model}` : "Nothing measured" }),
+      h("div", { class: "foot", text: t ? `top result of ${scored(latest).length} model${scored(latest).length === 1 ? "" : "s"}, ${scored(latest).reduce((a, m) => a + m.n, 0)} scored run${scored(latest).reduce((a, m) => a + m.n, 0) === 1 ? "" : "s"}` : "" })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Runs saved" }), h("div", { class: "value", text: runs.length })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Different models tried" }), h("div", { class: "value", text: new Set(runs.flatMap((r) => r.models.filter((m) => m.n > 0).map(key))).size })),
+    h("div", { class: "tile" }, h("div", { class: "label", text: "Runs needing attention" }), h("div", { class: "value", text: runs.filter((r) => attention(r).length).length })));
+}
+
+function renderRuns() {
+  const runs = runsDesc();
+  if (!runs.length) { put($("runs"), h("div", { class: "empty", text: "No runs yet. Run `python -m evals matrix` or `python -m evals run`." })); return; }
+  const head = ["Date and time", "Top result", "Models", "Scored runs", "Cost", "Needs attention", "Took", "Code"];
+  const rows = runs.map((run) => {
+    const t = bestModel(run), sc = scored(run);
+    const names = sc.map((m) => m.model);
+    const shown = names.slice(0, 3).join(", ") + (names.length > 3 ? `, +${names.length - 3} more` : "");
+    const chips = attention(run);
+    const tr = h("tr", { class: "row", tabindex: 0, role: "link", "aria-label": `Open the run from ${run.label}`,
+      onclick: () => openRun(run), onkeydown: (e) => { if (e.key === "Enter") openRun(run); } },
+      h("td", {}, h("a", { class: "when", href: run.href, text: run.label, onclick: (e) => e.stopPropagation() }), h("div", { class: "note", text: run.kind === "migrated" ? "moved from older results" : run.kind })),
+      h("td", {}, t ? h("span", { class: "big", text: pct(rate(t)) }) : h("span", { class: "chip bad", text: "✗ nothing measured" }), t ? h("div", { class: "note", text: t.model }) : null),
+      h("td", {}, h("div", { text: `${sc.length} model${sc.length === 1 ? "" : "s"}` }), h("div", { class: "note", text: shown })),
+      h("td", { class: "num", text: sc.reduce((a, m) => a + m.n, 0).toLocaleString() }),
+      h("td", { class: "num" }, h("div", { text: spendText(run) }), run.cost_unpriced ? h("div", { class: "note", text: `${run.cost_unpriced} model${run.cost_unpriced > 1 ? "s" : ""} unpriced` }) : null),
+      h("td", {}, chips.length ? chips.map(([cls, text]) => h("span", { class: `chip ${cls}`, text })) : h("span", { class: "chip ok", text: "✓ none" })),
+      h("td", { text: fmtDuration(run.seconds) }),
+      h("td", { class: "mono", text: run.git_sha || "" }));
+    return tr;
+  });
+  put($("runs"), h("table", {}, h("thead", {}, h("tr", {}, ...head.map((t, i) => h("th", { class: i === 3 || i === 4 ? "num" : "", text: t })))), h("tbody", {}, ...rows)));
+}
+
+const cmp = { a: null, b: null, model: null };
+function renderCompare() {
+  const runs = runsDesc().filter((r) => scored(r).length);
+  const host = $("cmp");
+  if (runs.length < 2) { put(host, h("div", { class: "empty", text: "Needs at least two runs with results." })); return; }
+  const byId = (id) => runs.find((r) => r.id === id);
+  if (!byId(cmp.a) || !byId(cmp.b)) {
+    // Default to the most informative pair: runs that share a model, preferably on different code versions
+    // (a before/after), then the most models in common, then the most recent.
+    let best = null;
+    for (let j = 0; j < runs.length; j++) for (let i = j + 1; i < runs.length; i++) {
+      const later = runs[j], earlier = runs[i];
+      const shared = scored(later).filter((m) => scored(earlier).some((x) => key(x) === key(m))).length;
+      if (!shared) continue;
+      const score = [earlier.git_sha !== later.git_sha ? 1 : 0, shared, -j, -i];
+      if (!best || score.some((v, k) => v !== best.score[k] && (v > best.score[k]) && score.slice(0, k).every((u, q) => u === best.score[q]))) best = { later, earlier, score };
+    }
+    cmp.b = (best ? best.later : runs[0]).id; cmp.a = (best ? best.earlier : runs[1]).id; cmp.model = null;
+  }
+  const A = byId(cmp.a), B = byId(cmp.b);
+  const common = scored(B).filter((m) => scored(A).some((x) => key(x) === key(m)));
+  if (!common.length) cmp.model = null; else if (!common.some((m) => key(m) === cmp.model)) cmp.model = key(common[0]);
+  const opt = (r) => `${r.label}  ·  code ${r.git_sha || "?"}`;
+  const picker = (which, label) => h("label", {}, `${label}: `, h("select", { "aria-label": label, onchange: (e) => { cmp[which] = e.target.value; renderCompare(); } },
+    ...runs.map((r) => h("option", { value: r.id, text: opt(r), selected: r.id === cmp[which] }))));
+  const delta = (x, y, goodUp = true, fmt = (d) => `${Math.round(d * 100)} pts`) => {
+    const d = y - x;
+    if (Math.abs(d) < 1e-9) return h("td", { class: "num", text: "no change" });
+    const good = goodUp ? d > 0 : d < 0;
+    return h("td", { class: "num", style: `color:${good ? "var(--good-text)" : "var(--bad-text)"};font-weight:600`, text: `${d > 0 ? "▲" : "▼"} ${fmt(Math.abs(d))} ${good ? "better" : "worse"}` });
+  };
+  const tbl = (head, rows) => h("div", { class: "scroll" }, h("table", {}, h("thead", {}, h("tr", {}, ...head.map((t, i) => h("th", { class: i ? "num" : "", text: t })))),
+    h("tbody", {}, ...rows.map((r) => h("tr", {}, ...r.map((c, i) => (c.nodeType ? c : h("td", { class: i ? "num" : "", text: c }))))))));
+  const find = (run, k) => scored(run).find((m) => key(m) === k);
+  const overall = common.map((m) => { const a = find(A, key(m)), b = find(B, key(m)); return [key(m), pct(rate(a)), pct(rate(b)), delta(rate(a), rate(b)), `${a.seconds.toFixed(1)} s`, `${b.seconds.toFixed(1)} s`, perRunText(a), perRunText(b)]; });
+  let perTask = null;
+  if (cmp.model) {
+    const a = find(A, cmp.model), b = find(B, cmp.model);
+    const tids = Object.keys(b.per_task).filter((t) => a.per_task[t] && a.per_task[t][1] && b.per_task[t][1]).sort();
+    perTask = tbl(["Task", "Earlier", "Later", "Change"], tids.map((t) => {
+      const [pa, na] = a.per_task[t], [pb, nb] = b.per_task[t];
+      return [t, `${pa}/${na}`, `${pb}/${nb}`, delta(pa / na, pb / nb)];
+    }));
+  }
+  put(host,
+    h("div", { class: "filters" }, picker("a", "Earlier"), picker("b", "Later")),
+    common.length ? null : h("p", { class: "note", text: "These two runs have no model in common." }),
+    common.length ? tbl(["Model in both runs", "Earlier", "Later", "Change in pass rate", "Earlier s/run", "Later s/run", "Earlier $/run", "Later $/run"], overall) : null,
+    common.length ? h("div", { class: "filters", style: "margin-top:14px" }, h("label", {}, "Task detail for: ", h("select", { "aria-label": "Model", onchange: (e) => { cmp.model = e.target.value; renderCompare(); } },
+      ...common.map((m) => h("option", { value: key(m), text: key(m), selected: key(m) === cmp.model }))))) : null,
+    perTask);
+}
+
+function isDark() { const t = document.documentElement.getAttribute("data-theme"); return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; }
+$("gen").textContent = `${DATA.runs.length} run(s). Built ${DATA.generated}. Each run's report is a separate file in its own folder under evals/results/runs.`;
+try { const saved = localStorage.getItem("evalTheme"); if (saved) document.documentElement.setAttribute("data-theme", saved); } catch (e) {}
+$("theme").addEventListener("click", () => {
+  const next = isDark() ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  try { localStorage.setItem("evalTheme", next); } catch (e) {}
+});
+renderKpis(); renderRuns(); renderCompare();
+</script>
+</body>
+</html>

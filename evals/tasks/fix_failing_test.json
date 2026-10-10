@@ -1,0 +1,37 @@
+{
+  "id": "fix_failing_test",
+  "category": "debugging",
+  "description": "Run failing tests, find two bugs, fix the code (not the tests). Hidden tests catch special-casing.",
+  "prompt": "The tests in test_inventory.py are failing. Find and fix the bugs in inventory.py. Do not change the tests.",
+  "fixtures": {
+    "inventory.py": "def restock_needed(items, threshold=5):\n    \"\"\"Return the names of items whose quantity is below the threshold, sorted.\"\"\"\n    return sorted(name for name, qty in items.items() if qty <= threshold)\n\n\ndef total_value(items, prices):\n    \"\"\"Total stock value: sum of quantity * price. Items with no price count as 0.\"\"\"\n    return sum(qty * prices[name] for name, qty in items.items())\n",
+    "test_inventory.py": "import unittest\n\nfrom inventory import restock_needed, total_value\n\n\nclass RestockTests(unittest.TestCase):\n    def test_only_items_below_the_threshold(self):\n        self.assertEqual(restock_needed({\"a\": 5, \"b\": 4, \"c\": 9}), [\"b\"])\n\n    def test_result_is_sorted(self):\n        self.assertEqual(restock_needed({\"z\": 1, \"m\": 2}), [\"m\", \"z\"])\n\n\nclass ValueTests(unittest.TestCase):\n    def test_total(self):\n        self.assertEqual(total_value({\"a\": 2, \"b\": 3}, {\"a\": 1.5, \"b\": 2}), 9.0)\n\n    def test_missing_price_counts_as_zero(self):\n        self.assertEqual(total_value({\"a\": 2, \"ghost\": 7}, {\"a\": 1.5}), 3.0)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+  },
+  "expect": {
+    "steps": [
+      {
+        "tool": [
+          "read_file",
+          "search_file",
+          "run_command"
+        ]
+      },
+      {
+        "tool": [
+          "str_replace",
+          "write_file"
+        ],
+        "args": {
+          "path": "(^|[\\\\/])inventory\\.py$"
+        }
+      }
+    ],
+    "unchanged_files": [
+      "test_inventory.py"
+    ],
+    "hidden_tests": {
+      "test_inventory_hidden.py": "import unittest\n\nfrom inventory import restock_needed, total_value\n\n\nclass HiddenRestock(unittest.TestCase):\n    def test_boundary_is_not_included(self):\n        self.assertEqual(restock_needed({\"x\": 10, \"y\": 9}, threshold=10), [\"y\"])\n\n    def test_default_threshold_is_five(self):\n        self.assertEqual(restock_needed({\"a\": 5, \"b\": 6, \"c\": 0}), [\"c\"])\n\n    def test_empty(self):\n        self.assertEqual(restock_needed({}), [])\n\n\nclass HiddenValue(unittest.TestCase):\n    def test_all_missing(self):\n        self.assertEqual(total_value({\"a\": 3}, {}), 0)\n\n    def test_zero_price_and_empty(self):\n        self.assertEqual(total_value({\"a\": 3}, {\"a\": 0}), 0)\n        self.assertEqual(total_value({}, {\"a\": 1}), 0)\n\n    def test_mixed(self):\n        self.assertEqual(total_value({\"a\": 1, \"b\": 2, \"c\": 3}, {\"a\": 10, \"c\": 1}), 13)\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    "max_tool_calls": 8
+  }
+}

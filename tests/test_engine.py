@@ -96,6 +96,42 @@ def test_several_tool_calls_in_one_turn_all_run_in_order(make_state, tmp_path):
     assert [e["name"] for e in final.tool_events] == ["list_dir", "get_current_time"]
 
 
+def test_gemini_style_stream_keeps_parallel_calls_apart_and_echoes_the_signature(make_state, tmp_path):
+    """No index on the deltas, and Gemini 3 rejects the next request without its thought_signature."""
+    from evals.fake import gemini_calls
+
+    (tmp_path / "x.txt").write_text("x", encoding="utf-8")
+    state, client = make_state(
+        [gemini_calls(call("list_dir", path="."), call("get_current_time")), say("ok")]
+    )
+    final, messages = drive(state)
+    assert [e["name"] for e in final.tool_events] == ["list_dir", "get_current_time"]
+    assert final.content == "ok"
+    sent = [m for m in client.requests[1]["kwargs"]["messages"] if m.get("role") == "assistant"][-1]
+    assert [tc["function"]["name"] for tc in sent["tool_calls"]] == ["list_dir", "get_current_time"]
+    assert sent["tool_calls"][0]["extra_content"] == {"google": {"thought_signature": "sig_1"}}
+    assert "extra_content" not in sent["tool_calls"][1]
+
+
+def test_tool_call_slot_uses_index_when_the_stream_provides_one():
+    from lm_studio_chat.chat.engine import tool_call_slot
+
+    assert tool_call_slot(1, "call_a", {0: {"id": "call_a"}}) == 1
+    assert tool_call_slot(0, None, {0: {"id": "call_a"}}) == 0
+
+
+def test_tool_call_slot_separates_calls_by_id_when_index_is_missing():
+    """Gemini's OpenAI-compatible stream sends index=None with one whole call per chunk."""
+    from lm_studio_chat.chat.engine import tool_call_slot
+
+    accum: dict[int, dict] = {}
+    for call_id in ("call_a", "call_b"):
+        accum.setdefault(tool_call_slot(None, call_id, accum), {"id": call_id})
+    assert list(accum) == [0, 1]
+    assert tool_call_slot(None, "call_a", accum) == 0  # a repeated id continues its own call
+    assert tool_call_slot(None, None, accum) == 1  # no id and no index: the latest call
+
+
 def test_cancel_stops_before_the_next_model_call(make_state):
     state, client = make_state([call("get_current_time"), say("never reached")])
     messages_ref = {}
@@ -208,3 +244,38 @@ def test_stop_kills_the_whole_command_tree_not_just_the_shell(make_state, tmp_pa
     while _pid_alive(child_pid) and time.monotonic() < deadline:
         time.sleep(0.1)
     assert not _pid_alive(child_pid), "the child process is still running after Stop"
+
+
+def test_a_command_that_prints_a_lot_is_not_mistaken_for_a_hang(make_state):
+    """Regression: output past the pipe buffer (about 4 KB on Windows, e.g. a failing test run's tracebacks)
+    used to block the child on write until the timeout, and was then reported as a hang."""
+    state, _ = make_state([])
+    started = time.monotonic()
+    out = tool_run_command(state, "python -c \"print('x' * 200000)\"", timeout_seconds=30)
+    assert "exit_code: 0" in out and "timed out" not in out
+    assert time.monotonic() - started < 20
+
+
+def test_a_real_hang_still_times_out(make_state):
+    state, _ = make_state([])
+    out = tool_run_command(state, 'python -c "import time; time.sleep(30)"', timeout_seconds=1)
+    assert "timed out after 1s" in out
+
+
+def test_file_tools_refuse_content_with_nul_characters(make_state, tmp_path):
+    """Regression: a mangled unicode escape reached disk as a NUL, and the test file could not be compiled."""
+    from lm_studio_chat.tools.filesystem import tool_str_replace, tool_write_file
+
+    state, _ = make_state([])
+    nul = chr(0)
+    out = tool_write_file(state, "bad.py", f"x = 'Caf{nul}e9'\n")
+    assert out.startswith("Error:") and "NUL" in out
+    assert not (tmp_path / "bad.py").exists()
+
+    (tmp_path / "ok.py").write_text("x = 1\n", encoding="utf-8")
+    out = tool_str_replace(state, "ok.py", "x = 1", f"x = '{nul}'")
+    assert out.startswith("Error:") and "NUL" in out
+    assert (tmp_path / "ok.py").read_text(encoding="utf-8") == "x = 1\n"
+
+    # a real backslash-u escape in source code is fine
+    assert tool_write_file(state, "good.py", "x = 'Caf\\u00e9'\n").startswith("Wrote")

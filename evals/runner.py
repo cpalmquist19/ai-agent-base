@@ -16,6 +16,7 @@ from lm_studio_chat.chat.prompts import build_system_prompt
 from lm_studio_chat.providers.base import LLMProvider
 from lm_studio_chat.state import create_app_state
 
+from evals.cost import finalize_usage
 from evals.scoring import ToolCall, score_run
 
 DEFAULT_TIMEOUT_S = 180
@@ -46,6 +47,8 @@ class RunRecord:
     error: str | None = None
     trace_path: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    # Token counts for every model call in this run (see evals/cost.py); None only for hand-built records.
+    usage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -109,6 +112,7 @@ def run_task(
     answer = ""
     messages: list[dict[str, Any]] = []
     tool_calls: list[ToolCall] = []
+    reported_usage: dict[str, Any] | None = None
 
     with tempfile.TemporaryDirectory(prefix="agent_eval_") as tmp, _sandbox_env():
         base = Path(tmp)
@@ -136,6 +140,7 @@ def run_task(
             ):
                 final = partial
             answer = final.content if final is not None else ""
+            reported_usage = final.usage if final is not None else None
         except Exception as exc:  # a crashing run is a failed run, not a crashed eval
             error = f"{type(exc).__name__}: {exc}"
 
@@ -183,4 +188,5 @@ def run_task(
         error=error,
         trace_path=trace_path,
         extra={"nudges": count_nudges(messages)},
+        usage=finalize_usage(reported_usage, messages, answer),
     )

@@ -19,7 +19,7 @@ Run:
     # open http://127.0.0.1:7860
 
 Environment overrides (all optional):
-    LLM_PROVIDER            lm_studio (default), openai, anthropic, or unsloth
+    LLM_PROVIDER            lm_studio (default), openai, anthropic, google, or unsloth
     LM_STUDIO_BASE_URL      default: http://localhost:1234/v1
     LM_STUDIO_API_KEY       default: lm-studio  (LM Studio ignores it, but the SDK requires a value)
     LM_STUDIO_MODEL         pin to a specific model id instead of auto-detecting
@@ -33,6 +33,12 @@ Environment overrides (all optional):
     ANTHROPIC_CONTEXT_WINDOW default: 200000
     ANTHROPIC_TEMPERATURE   optional; omit for Claude 4.7+ (they reject values below 1)
     ANTHROPIC_WORKSPACE_ID  optional; some multi-workspace keys require it
+    GOOGLE_AI_STUDIO_API_KEY required when LLM_PROVIDER=google
+    GOOGLE_AI_STUDIO_MODEL  required when LLM_PROVIDER=google (e.g. gemini-3.8-flash)
+    GOOGLE_AI_STUDIO_BASE_URL default: https://generativelanguage.googleapis.com/v1beta/openai/
+    GOOGLE_AI_STUDIO_CONTEXT_WINDOW default: 1000000
+    GOOGLE_AI_STUDIO_TEMPERATURE optional, 0 to 2; omitted by default (model default)
+    GOOGLE_AI_STUDIO_REASONING_EFFORT optional: none, minimal, low, medium, high
     LM_STUDIO_MAX_TOKENS    max completion tokens per round (default: 32768)
     LM_STUDIO_TEMPERATURE   sampling temperature (default: 0.3; lower = more grounded)
     LM_STUDIO_SKILLS_DIRS   extra skill directories (OS path separator; optional)

@@ -1,0 +1,18 @@
+{
+  "repeats": 3,
+  "timeout": 180,
+  "defaults": {
+    "openai": ["gpt-5.4-mini", "gpt-5.6-luna", "gpt-5.6-terra"],
+    "anthropic": ["claude-haiku-5-5", "claude-haiku-4-5-20251001"],
+    "google": ["gemini-3.8-flash"],
+    "lm_studio": ["(loaded)"],
+    "unsloth": ["(loaded)"]
+  },
+  "also_offered": {
+    "openai": ["gpt-5.6-sol"],
+    "anthropic": ["claude-opus-5-5", "claude-fable-5-1", "claude-sonnet-5-5"],
+    "google": ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"],
+    "lm_studio": [],
+    "unsloth": []
+  }
+}

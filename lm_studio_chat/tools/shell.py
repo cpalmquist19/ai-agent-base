@@ -191,17 +191,24 @@ def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -
     cancelled = False
     timed_out = False
     try:
-        while proc.poll() is None:
+        while True:
+            try:
+                # communicate() keeps draining both pipes while it waits. Polling instead let a command
+                # that printed more than a pipe buffer (about 4 KB on Windows, e.g. a failing test
+                # run's tracebacks) block on write until the timeout, then be reported as a hang.
+                stdout, stderr = proc.communicate(timeout=0.1)
+                break
+            except subprocess.TimeoutExpired:
+                pass
             if state.cancel.is_set():
                 cancelled = True
-                terminate_process_tree(proc)
-                break
-            if time.monotonic() >= deadline:
+            elif time.monotonic() >= deadline:
                 timed_out = True
-                terminate_process_tree(proc)
-                break
-            time.sleep(0.1)
-        stdout, stderr = proc.communicate(timeout=5)
+            else:
+                continue
+            terminate_process_tree(proc)
+            stdout, stderr = proc.communicate(timeout=5)
+            break
     except subprocess.TimeoutExpired:
         terminate_process_tree(proc)
         try:

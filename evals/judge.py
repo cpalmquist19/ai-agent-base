@@ -11,6 +11,8 @@ import json
 import re
 from typing import Any
 
+from lm_studio_chat.chat.usage import read_usage
+
 JUDGE_PROMPT = """You are grading an AI assistant's answer. Judge ONLY against the source material.
 
 Task given to the assistant:
@@ -70,7 +72,12 @@ class LLMJudge:
         for kwargs in variants:
             try:
                 reply = self.client.chat.completions.create(model=self.model_id, messages=messages, **kwargs)
-                return parse_judge_reply(reply.choices[0].message.content or "")
+                graded = parse_judge_reply(reply.choices[0].message.content or "")
+                # What the judge itself cost, kept apart from the model under test.
+                graded["model"] = self.model_id
+                if getattr(reply, "usage", None) is not None:
+                    graded["usage"] = read_usage(reply.usage)
+                return graded
             except Exception as exc:
                 last_error = f"{type(exc).__name__}: {exc}"
         return {"score": None, "error": last_error}
