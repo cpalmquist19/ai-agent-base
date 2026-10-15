@@ -31,7 +31,7 @@ def _live_provider(provider: str, model: str | None):
         os.environ[model_env] = model
     elif provider in ("lm_studio", "unsloth"):  # "whichever is loaded": don't carry over an earlier pin
         os.environ.pop({"lm_studio": "LM_STUDIO_MODEL", "unsloth": "UNSLOTH_MODEL"}[provider], None)
-    from lm_studio_chat.providers import create_provider
+    from relay.providers import create_provider
 
     return create_provider()
 

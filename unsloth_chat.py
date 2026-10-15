@@ -4,7 +4,7 @@ Unsloth is a training/inference library, not a chat server. This launcher talks
 to whatever OpenAI-compatible process is serving a Unsloth model — typically
 vLLM (port 8000), llama-server (port 8001), or SGLang.
 
-Features (same as lm_studio_chat.py):
+Features (same as relay.py):
   - Streaming responses
   - Stop button to cancel an in-flight generation
   - Tool calling with a multi-round loop
@@ -38,7 +38,7 @@ Environment overrides (all optional):
     LM_STUDIO_SKILLS_DIRS   extra skill directories (OS path separator; optional)
 
 Per-chat model logs:
-    ~/.lm_studio_chat_logs/chat_<session_id>.log
+    ~/.relay_logs/chat_<session_id>.log
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ import os
 
 os.environ["LLM_PROVIDER"] = "unsloth"
 
-from lm_studio_chat.main import main
+from relay.main import main
 
 if __name__ == "__main__":
     main()

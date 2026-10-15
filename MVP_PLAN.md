@@ -17,7 +17,6 @@ Follow this file in order. Check boxes as phases land. Do not start a later phas
 - Auth, packaging (`pyproject.toml`, pipx, installer)
 - CDN-free UI (document network need only if you touch README)
 - GPU meter polish, Test-vs-All explorer, KaTeX, minimap
-- Renaming the package off `lm_studio_chat`
 - Broad test suite (smoke only, in P7)
 
 ---
@@ -41,19 +40,19 @@ Follow this file in order. Check boxes as phases land. Do not start a later phas
 ```
 static/app.js                      P1 explorer + editor reload; bump ?v= in index.html
 static/index.html                  P1 cache-bust; P5/P6 UI copy if needed
-lm_studio_chat/tools/filesystem.py P4 path sandbox
-lm_studio_chat/tools/shell.py      P4 cwd / cd sandbox (project root)
-lm_studio_chat/tools/inspect_page.py  P3 headless
-lm_studio_chat/tools/web.py        P6 availability probe
-lm_studio_chat/tools/registry.py   P6 catalog availability
-lm_studio_chat/tools/schemas.py    P3 wording if it still says “headless” as a guarantee
-lm_studio_chat/chat/turns.py       P2 history window
-lm_studio_chat/chat/prompts.py     P5 vision-conditional prompt
-lm_studio_chat/config.py           P4/P5 constants + SYSTEM_PROMPT vision block
-lm_studio_chat/providers/*         P5 vision capability flag if cheap
-lm_studio_chat/api/routes/status.py  P6 tools/skills availability; P7 health
-lm_studio_chat/api/routes/chat.py  P2 overflow error surfacing
-lm_studio_chat/main.py             P7 startup message
+relay/tools/filesystem.py P4 path sandbox
+relay/tools/shell.py      P4 cwd / cd sandbox (project root)
+relay/tools/inspect_page.py  P3 headless
+relay/tools/web.py        P6 availability probe
+relay/tools/registry.py   P6 catalog availability
+relay/tools/schemas.py    P3 wording if it still says “headless” as a guarantee
+relay/chat/turns.py       P2 history window
+relay/chat/prompts.py     P5 vision-conditional prompt
+relay/config.py           P4/P5 constants + SYSTEM_PROMPT vision block
+relay/providers/*         P5 vision capability flag if cheap
+relay/api/routes/status.py  P6 tools/skills availability; P7 health
+relay/api/routes/chat.py  P2 overflow error surfacing
+relay/main.py             P7 startup message
 README.md                          P3/P5/P7 docs truth
 .env.example                       P3 headed env (already present — verify)
 ```
@@ -123,10 +122,10 @@ On SSE `done` (and `error` if tools already ran):
 
 ### Files
 
-- `lm_studio_chat/chat/turns.py` — trim in `run_user_turn` before calling `run_chat`
-- `lm_studio_chat/lm_client.py` — reuse `effective_context_window`; may cache last caps on `AppState` if you already fetch them on status (do not call nvidia-smi from the chat path)
-- `lm_studio_chat/state.py` — optional `context_window: int | None` filled by status/runtime or a cheap caps fetch at turn start for local providers
-- `lm_studio_chat/api/routes/chat.py` — only if you need to pass window in; prefer keeping logic in `turns.py`
+- `relay/chat/turns.py` — trim in `run_user_turn` before calling `run_chat`
+- `relay/lm_client.py` — reuse `effective_context_window`; may cache last caps on `AppState` if you already fetch them on status (do not call nvidia-smi from the chat path)
+- `relay/state.py` — optional `context_window: int | None` filled by status/runtime or a cheap caps fetch at turn start for local providers
+- `relay/api/routes/chat.py` — only if you need to pass window in; prefer keeping logic in `turns.py`
 
 ### Do not
 
@@ -159,8 +158,8 @@ Update tool schema description if it claims headless as the only mode. Keep READ
 
 ### Files
 
-- `lm_studio_chat/tools/inspect_page.py`
-- `lm_studio_chat/tools/schemas.py` (wording only)
+- `relay/tools/inspect_page.py`
+- `relay/tools/schemas.py` (wording only)
 - `README.md` / `.env.example` (confirm; edit only if stale)
 
 ### Success
@@ -189,9 +188,9 @@ Update tool schema description if it claims headless as the only mode. Keep READ
 
 ### Files
 
-- `lm_studio_chat/tools/filesystem.py` — `resolve_tool_path`
-- `lm_studio_chat/tools/shell.py` — `resolve_cd_target` / `cd` handling
-- `lm_studio_chat/config.py` — env flag + prompt sentence
+- `relay/tools/filesystem.py` — `resolve_tool_path`
+- `relay/tools/shell.py` — `resolve_cd_target` / `cd` handling
+- `relay/config.py` — env flag + prompt sentence
 - `README.md` Security section — say file tools are project-scoped; shell is not fully scoped; opt-out env
 
 ### Do not
@@ -224,12 +223,12 @@ Update tool schema description if it claims headless as the only mode. Keep READ
 
 ### Files
 
-- `lm_studio_chat/providers/base.py` — `supports_vision: bool = False`
-- `lm_studio_chat/providers/lm_studio.py` / `openai_provider.py`
-- `lm_studio_chat/chat/prompts.py`
-- `lm_studio_chat/config.py` — split vision instructions out of the always-on prompt
-- `lm_studio_chat/sessions/attachments.py` — `compose_user_message` / reinjection gated on vision
-- `lm_studio_chat/api/routes/status.py` — expose `supports_vision` so the UI can hint
+- `relay/providers/base.py` — `supports_vision: bool = False`
+- `relay/providers/lm_studio.py` / `openai_provider.py`
+- `relay/chat/prompts.py`
+- `relay/config.py` — split vision instructions out of the always-on prompt
+- `relay/sessions/attachments.py` — `compose_user_message` / reinjection gated on vision
+- `relay/api/routes/status.py` — expose `supports_vision` so the UI can hint
 - `static/app.js` — optional one-line composer hint when attaching an image and `supports_vision` is false
 - `README.md`
 
@@ -257,10 +256,10 @@ Extend `/api/status` tool catalog entries:
 
 ### Files
 
-- `lm_studio_chat/tools/web.py` — `web_search_available()` helper
-- `lm_studio_chat/tools/inspect_page.py` — `inspect_page_available()` helper
-- `lm_studio_chat/tools/registry.py` — catalog includes availability
-- `lm_studio_chat/api/routes/status.py`
+- `relay/tools/web.py` — `web_search_available()` helper
+- `relay/tools/inspect_page.py` — `inspect_page_available()` helper
+- `relay/tools/registry.py` — catalog includes availability
+- `relay/api/routes/status.py`
 - `static/app.js` — `applyBasicStatus` tool chips
 - bump `app.js?v=` again if P1 already shipped a bump and this is a later change
 
@@ -282,7 +281,7 @@ Do this last so README describes the product that actually exists.
 
 ### README
 
-- Replace `github.com/YOUR_USERNAME/lm-studio-chat.git` with the real remote if this repo has one; otherwise use a local-only snippet (`cd` into the folder you already have) and drop the fake clone URL.
+- Replace `github.com/YOUR_USERNAME/relay.git` with the real remote if this repo has one; otherwise use a local-only snippet (`cd` into the folder you already have) and drop the fake clone URL.
 - Vision bullet matches P5.
 - Security: file tools project-scoped; shell still powerful; `LM_STUDIO_ALLOW_UNRESTRICTED_PATHS`.
 - Optional deps: note that the UI lists them as unavailable until installed.

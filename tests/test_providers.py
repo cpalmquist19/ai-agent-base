@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from lm_studio_chat.providers.factory import create_provider
-from lm_studio_chat.providers.openai_provider import openai_model_supports_vision
+from relay.providers.factory import create_provider
+from relay.providers.openai_provider import openai_model_supports_vision
 
 
 def _cloud(monkeypatch, provider: str, **env: str) -> None:

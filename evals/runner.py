@@ -11,10 +11,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from lm_studio_chat.chat.engine import run_chat
-from lm_studio_chat.chat.prompts import build_system_prompt
-from lm_studio_chat.providers.base import LLMProvider
-from lm_studio_chat.state import create_app_state
+from relay.chat.engine import run_chat
+from relay.chat.prompts import build_system_prompt
+from relay.providers.base import LLMProvider
+from relay.state import create_app_state
 
 from evals.cost import finalize_usage
 from evals.scoring import ToolCall, score_run

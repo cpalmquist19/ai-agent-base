@@ -1,0 +1,246 @@
+"""Shell command execution and cwd persistence."""
+
+from __future__ import annotations
+
+import os
+import re
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+from relay.config import COMMAND_OUTPUT_LIMIT, allow_unrestricted_paths
+from relay.state import AppState
+
+
+def _signal_group(pgid: int, sig: int) -> None:
+    try:
+        os.killpg(pgid, sig)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _group_alive(pgid: int) -> bool:
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def terminate_process_tree(proc: subprocess.Popen) -> None:
+    """Best-effort kill of a shell command and everything it started."""
+    try:
+        if os.name == "nt":
+            if proc.poll() is None:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+            return
+        # POSIX: tool_run_command starts the shell in its own session, so its process
+        # group id is proc.pid. Signal the whole group. Terminating only the shell leaves
+        # its children running with the output pipes still open, and run_command then
+        # blocks until they exit on their own.
+        _signal_group(proc.pid, signal.SIGTERM)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            proc.poll()  # reap the shell so it doesn't count as a live group member
+            if not _group_alive(proc.pid):
+                return
+            time.sleep(0.05)
+        _signal_group(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def kill_active_command(state: AppState) -> None:
+    with state.active_command_lock:
+        proc = state.active_command_proc
+    if proc is not None:
+        terminate_process_tree(proc)
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        try:
+            Path(str(path.resolve()).lower()).relative_to(
+                Path(str(root.resolve()).lower())
+            )
+            return True
+        except ValueError:
+            return False
+
+
+def resolve_cd_target(state: AppState, target: str) -> Path:
+    target = target.strip().strip('"').strip("'")
+    if not target or target == "~":
+        if not allow_unrestricted_paths():
+            if state.project_root is not None:
+                return state.project_root.resolve()
+        return Path.home().resolve()
+    expanded = Path(os.path.expandvars(target)).expanduser()
+    if not expanded.is_absolute():
+        expanded = state.shell_cwd / expanded
+    resolved = expanded.resolve()
+
+    if not allow_unrestricted_paths():
+        sandbox_root = (state.project_root or state.shell_cwd).resolve()
+        if not _is_relative_to(resolved, sandbox_root):
+            target_label = "the open project" if state.project_root is not None else "the working directory"
+            raise ValueError(f"target directory is outside {target_label}: {target} (resolved: {resolved})")
+
+    return resolved
+
+
+_WINDOWS_DRIVE_PATH = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s\"'|&;<>]*")
+_UNC_PATH = re.compile(r"\\\\[^\s\"'|&;<>]+")
+_HOME_PATH = re.compile(r"(?:(?<=^)|(?<=[\s\"'=]))(~|\$HOME|\$\{HOME\}|%USERPROFILE%|%APPDATA%|%LOCALAPPDATA%|%TEMP%|%TMP%)(?:[\\/][^\s\"'|&;<>]*)?")
+_PARENT_PATH = re.compile(r"(?:(?<=^)|(?<=[\s\"'=]))(\.\.(?:[\\/][^\s\"'|&;<>]*)?)(?=$|[\s\"'|&;<>])")
+_POSIX_ABSOLUTE_PATH = re.compile(r"(?<![\w.~:/\\])/[^\s\"'|&;<>]+")
+# Where programs live. Commands may reference these without being a data-access escape.
+_POSIX_PROGRAM_DIRS = ("/usr/", "/bin/", "/sbin/", "/lib/", "/lib64/", "/opt/", "/dev/null", "/dev/stdout", "/dev/stderr")
+
+
+def command_path_violation(state: AppState, command: str) -> str | None:
+    """Return the first path in ``command`` that points outside the project, or None.
+
+    BEST EFFORT, not a sandbox: it reads the command text only. It stops the common case of
+    a model reading ``C:/elsewhere/file`` or ``/etc/passwd`` through the shell after the file
+    tools refused. It cannot stop a determined command (built paths, encoded strings, scripts).
+    """
+    root = (state.project_root or state.shell_cwd).resolve()
+    candidates: list[str] = []
+    candidates += _WINDOWS_DRIVE_PATH.findall(command)
+    candidates += _UNC_PATH.findall(command)
+    candidates += [m.group(0) for m in _HOME_PATH.finditer(command)]
+    candidates += [m.group(1) for m in _PARENT_PATH.finditer(command)]
+    if os.name != "nt":
+        candidates += [c for c in _POSIX_ABSOLUTE_PATH.findall(command) if not c.startswith(_POSIX_PROGRAM_DIRS)]
+
+    for raw in candidates:
+        token = raw.rstrip(",;)'\"")
+        if token.strip(".") and token.endswith("."):  # sentence punctuation, but never strip ".." itself
+            token = token.rstrip(".")
+        if os.name != "nt":
+            token = token.replace("\\", "/")  # a model may write Windows-style separators; be conservative
+        expanded = Path(os.path.expandvars(token)).expanduser()
+        if not expanded.is_absolute():
+            expanded = state.shell_cwd / expanded
+        try:
+            resolved = expanded.resolve()
+        except (OSError, RuntimeError):
+            return token
+        if not _is_relative_to(resolved, root):
+            return token
+    return None
+
+
+def tool_run_command(state: AppState, command: str, timeout_seconds: int = 60) -> str:
+    """Run a shell command. Plain `cd` updates the persistent working directory."""
+    command = command.strip()
+    if not command:
+        return "Error: empty command."
+
+    cd_match = re.match(r"^cd(?:\s+(.*))?$", command, re.IGNORECASE | re.DOTALL)
+    if cd_match and "&&" not in command and "|" not in command and ";" not in command:
+        target = (cd_match.group(1) or "").strip()
+        try:
+            new_cwd = resolve_cd_target(state, target)
+        except (OSError, ValueError) as exc:
+            return f"Error resolving path: {exc}"
+        if not new_cwd.is_dir():
+            return f"Error: '{new_cwd}' is not a directory.\nCWD: {state.shell_cwd}"
+        state.shell_cwd = new_cwd
+        return f"Changed directory to {state.shell_cwd}"
+
+    if not allow_unrestricted_paths():
+        outside = command_path_violation(state, command)
+        if outside is not None:
+            label = "the open project" if state.project_root is not None else "the working directory"
+            return (
+                f"Error: command refers to a path outside {label}: {outside}. "
+                "Paths outside the project are blocked; run commands on files inside the project."
+            )
+
+    try:
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            cwd=str(state.shell_cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            start_new_session=(os.name != "nt"),  # own process group, so Stop can kill the whole tree
+        )
+    except OSError as exc:
+        return f"Error launching command: {exc}\nCWD: {state.shell_cwd}"
+
+    with state.active_command_lock:
+        state.active_command_proc = proc
+    deadline = time.monotonic() + max(1, int(timeout_seconds))
+    cancelled = False
+    timed_out = False
+    try:
+        while True:
+            try:
+                # communicate() keeps draining both pipes while it waits. Polling instead let a command
+                # that printed more than a pipe buffer (about 4 KB on Windows, e.g. a failing test
+                # run's tracebacks) block on write until the timeout, then be reported as a hang.
+                stdout, stderr = proc.communicate(timeout=0.1)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            if state.cancel.is_set():
+                cancelled = True
+            elif time.monotonic() >= deadline:
+                timed_out = True
+            else:
+                continue
+            terminate_process_tree(proc)
+            stdout, stderr = proc.communicate(timeout=5)
+            break
+    except subprocess.TimeoutExpired:
+        terminate_process_tree(proc)
+        try:
+            stdout, stderr = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = "", ""  # an orphan still holds the pipes; don't hang waiting on it
+        timed_out = True
+    finally:
+        with state.active_command_lock:
+            if state.active_command_proc is proc:
+                state.active_command_proc = None
+
+    if cancelled:
+        return f"Error: command cancelled by user.\nCWD: {state.shell_cwd}"
+    if timed_out:
+        return (
+            f"Error: command timed out after {timeout_seconds}s.\n"
+            f"CWD: {state.shell_cwd}"
+        )
+
+    chunks = [f"CWD: {state.shell_cwd}", f"exit_code: {proc.returncode}"]
+    stdout = (stdout or "").rstrip()
+    stderr = (stderr or "").rstrip()
+    if stdout:
+        chunks.append("--- stdout ---\n" + stdout)
+    if stderr:
+        chunks.append("--- stderr ---\n" + stderr)
+    if not stdout and not stderr:
+        chunks.append("(no output)")
+
+    text = "\n".join(chunks)
+    if len(text) > COMMAND_OUTPUT_LIMIT:
+        text = text[:COMMAND_OUTPUT_LIMIT] + f"\n... (truncated at {COMMAND_OUTPUT_LIMIT} chars)"
+    return text

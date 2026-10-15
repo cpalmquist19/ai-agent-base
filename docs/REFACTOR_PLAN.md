@@ -1,16 +1,16 @@
-# lm_studio_chat.py refactor plan
+# relay.py refactor plan
 
 Monolith: **~4024 → ~35 lines** (Phase 8 complete). Split by **domain**, not line count. **Replace module globals first** — file splits alone cause circular imports.
 
 Entry points (all equivalent):
-- `python lm_studio_chat.py` → uvicorn on `:7860`
-- `python -m lm_studio_chat` → same
+- `python relay.py` → uvicorn on `:7860`
+- `python -m relay` → same
 
 ---
 
 ## Progress (Phases 0–8 done)
 
-### Package: `lm_studio_chat/`
+### Package: `relay/`
 
 | Module | Status | Notes |
 |--------|--------|-------|
@@ -20,7 +20,7 @@ Entry points (all equivalent):
 | `sse.py` | ✅ | SSE formatting |
 | `state.py` | ✅ | AppState, ToolContext, create_app_state() |
 | `main.py` | ✅ | bootstrap: detect model, load project, run uvicorn |
-| `__main__.py` | ✅ | `python -m lm_studio_chat` |
+| `__main__.py` | ✅ | `python -m relay` |
 | `tools/builtin.py` | ✅ | get_current_time, calculate |
 | `tools/filesystem.py` | ✅ | read/search/list/write/str_replace + resolve_tool_path |
 | `tools/shell.py` | ✅ | run_command, kill_active_command |
@@ -44,10 +44,10 @@ Entry points (all equivalent):
 | `api/routes/sessions.py` | ✅ | /api/sessions/*, /api/stop, /api/open-log |
 | `api/routes/chat.py` | ✅ | /api/chat (SSE) |
 
-### Root shim (`lm_studio_chat.py`)
+### Root shim (`relay.py`)
 
 - Docstring (usage / env vars) — preserved for backward compatibility
-- Re-exports `main` from `lm_studio_chat.main`
+- Re-exports `main` from `relay.main`
 
 ### Key design changes landed
 
@@ -56,14 +56,14 @@ Entry points (all equivalent):
 - **Registry pattern** — tools registered in `tools/registry.py`
 - **Chat engine isolated** — `run_user_turn` → `run_chat` in `chat/*`
 - **API routers** — domain routers receive `state` via factory; `create_app` wires them together
-- **Package entry** — `main()` lives in `lm_studio_chat/main.py`; root file is a thin shim
+- **Package entry** — `main()` lives in `relay/main.py`; root file is a thin shim
 
 ---
 
 ## Target layout (final)
 
 ```
-lm_studio_chat/
+relay/
   __init__.py                  ✅  exports create_app, main
   __main__.py                  ✅
   main.py                      ✅
@@ -102,7 +102,7 @@ lm_studio_chat/
       sessions.py              ✅
       chat.py                  ✅
 static/, skills/               # unchanged
-lm_studio_chat.py              ✅  ~35-line backward-compat shim
+relay.py              ✅  ~35-line backward-compat shim
 ```
 
 ## AppState (central design move) — ✅ implemented
@@ -139,7 +139,7 @@ class AppState:
 ## Phases (incremental; app must run after each)
 
 ### Phase 0 — Baseline
-- [x] Entry: `python lm_studio_chat.py` → uvicorn on `:7860`
+- [x] Entry: `python relay.py` → uvicorn on `:7860`
 - [x] Smoke test verified by user (Phases 1–2)
 
 ### Phase 1 — Leaf extractions (no globals) ✅
@@ -186,17 +186,17 @@ class AppState:
 - [x] `skills_catalog` → `skills/discovery.py`
 
 ### Phase 8 — Entry shim & cleanup ✅
-- [x] `lm_studio_chat/main.py` — bootstrap `main()` in package
-- [x] `lm_studio_chat/__main__.py` — `python -m lm_studio_chat`
-- [x] Root `lm_studio_chat.py` — thin re-export (docstring preserved)
+- [x] `relay/main.py` — bootstrap `main()` in package
+- [x] `relay/__main__.py` — `python -m relay`
+- [x] Root `relay.py` — thin re-export (docstring preserved)
 - [x] API smoke test pass (TestClient: `/`, `/api/status`, `/api/sessions`, …)
 
 ---
 
 ## Success criteria
 
-- [x] `python lm_studio_chat.py` works unchanged for users
-- [x] `python -m lm_studio_chat` works
+- [x] `python relay.py` works unchanged for users
+- [x] `python -m relay` works
 - [x] No module-level mutable app state
 - [x] Tools testable without FastAPI or LM Studio (tools/* + registry)
 - [x] Optional deps (playwright, ddgs) isolated so import failures are localized

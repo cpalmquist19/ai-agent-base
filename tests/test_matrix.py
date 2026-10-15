@@ -22,7 +22,7 @@ from evals.matrix import (
     run_matrix,
 )
 from evals.tasks import load_tasks
-from lm_studio_chat.providers.base import LLMProvider
+from relay.providers.base import LLMProvider
 
 DEFAULTS = {
     "repeats": 3,

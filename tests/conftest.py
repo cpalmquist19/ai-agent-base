@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 
 from evals.fake import ScriptedClient
-from lm_studio_chat.chat.engine import run_chat
-from lm_studio_chat.providers.base import LLMProvider
-from lm_studio_chat.state import create_app_state
+from relay.chat.engine import run_chat
+from relay.providers.base import LLMProvider
+from relay.state import create_app_state
 
 
 @pytest.fixture(autouse=True)

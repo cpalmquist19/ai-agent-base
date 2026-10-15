@@ -111,14 +111,13 @@ Extend `/api/status`:
 - Per-session provider override
 - Anthropic native Messages API (citations, prompt caching, thinking details). Claude chat goes through the OpenAI-compatible endpoint instead
 - Provider picker in UI without restart
-- Renaming package away from `lm_studio_chat`
 
 ---
 
 ## File map
 
 ```
-lm_studio_chat/providers/
+relay/providers/
   __init__.py
   base.py          # LLMProvider
   factory.py       # create_provider()

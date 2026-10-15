@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any
 
-from lm_studio_chat.chat.usage import read_usage
+from relay.chat.usage import read_usage
 
 JUDGE_PROMPT = """You are grading an AI assistant's answer. Judge ONLY against the source material.
 

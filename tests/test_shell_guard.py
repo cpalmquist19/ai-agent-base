@@ -6,10 +6,10 @@ import os
 
 import pytest
 
-from lm_studio_chat.chat.prompts import build_system_prompt
-from lm_studio_chat.tools.platform_info import environment_note, shell_syntax
-from lm_studio_chat.tools.schemas import TOOL_SCHEMAS
-from lm_studio_chat.tools.shell import command_path_violation, tool_run_command
+from relay.chat.prompts import build_system_prompt
+from relay.tools.platform_info import environment_note, shell_syntax
+from relay.tools.schemas import TOOL_SCHEMAS
+from relay.tools.shell import command_path_violation, tool_run_command
 
 
 @pytest.fixture

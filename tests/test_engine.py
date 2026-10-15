@@ -10,8 +10,8 @@ import time
 import pytest
 
 from evals.fake import EMPTY, call, say
-from lm_studio_chat.config import MAX_EMPTY_CONTINUES, MAX_TOOL_ROUNDS
-from lm_studio_chat.tools.shell import kill_active_command, tool_run_command
+from relay.config import MAX_EMPTY_CONTINUES, MAX_TOOL_ROUNDS
+from relay.tools.shell import kill_active_command, tool_run_command
 from tests.conftest import drive
 
 
@@ -114,7 +114,7 @@ def test_gemini_style_stream_keeps_parallel_calls_apart_and_echoes_the_signature
 
 
 def test_tool_call_slot_uses_index_when_the_stream_provides_one():
-    from lm_studio_chat.chat.engine import tool_call_slot
+    from relay.chat.engine import tool_call_slot
 
     assert tool_call_slot(1, "call_a", {0: {"id": "call_a"}}) == 1
     assert tool_call_slot(0, None, {0: {"id": "call_a"}}) == 0
@@ -122,7 +122,7 @@ def test_tool_call_slot_uses_index_when_the_stream_provides_one():
 
 def test_tool_call_slot_separates_calls_by_id_when_index_is_missing():
     """Gemini's OpenAI-compatible stream sends index=None with one whole call per chunk."""
-    from lm_studio_chat.chat.engine import tool_call_slot
+    from relay.chat.engine import tool_call_slot
 
     accum: dict[int, dict] = {}
     for call_id in ("call_a", "call_b"):
@@ -142,7 +142,7 @@ def test_cancel_stops_before_the_next_model_call(make_state):
 
     messages = [{"role": "system", "content": "s"}, {"role": "user", "content": "go"}]
     messages_ref["m"] = messages
-    from lm_studio_chat.chat.engine import run_chat
+    from relay.chat.engine import run_chat
 
     final = None
     for partial in run_chat(state, "scripted", messages, should_cancel=cancel_after_first_tool):
@@ -172,7 +172,7 @@ def test_provider_temperature_overrides_the_global_default(make_state):
 
 
 def test_declared_context_window_is_used_for_cloud_providers(make_state):
-    from lm_studio_chat.chat.turns import resolve_context_budget
+    from relay.chat.turns import resolve_context_budget
 
     state, _ = make_state([], local=False, context_window=200_000)
     window, budget = resolve_context_budget(state)
@@ -264,7 +264,7 @@ def test_a_real_hang_still_times_out(make_state):
 
 def test_file_tools_refuse_content_with_nul_characters(make_state, tmp_path):
     """Regression: a mangled unicode escape reached disk as a NUL, and the test file could not be compiled."""
-    from lm_studio_chat.tools.filesystem import tool_str_replace, tool_write_file
+    from relay.tools.filesystem import tool_str_replace, tool_write_file
 
     state, _ = make_state([])
     nul = chr(0)

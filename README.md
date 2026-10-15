@@ -1,4 +1,4 @@
-# lm-studio-chat
+# relay
 
 A local coding agent with a web UI, backed by [LM Studio](https://lmstudio.ai/)'s OpenAI-compatible API.
 
@@ -25,8 +25,8 @@ Stream chat responses, cancel in-flight generations, and let the model use tools
 ## Quick start
 
 ```bash
-git clone https://github.com/cpalmquist19/ai-agent-base.git
-cd ai-agent-base
+git clone https://github.com/cpalmquist19/relay.git
+cd relay
 
 python -m venv venv
 # Windows
@@ -43,8 +43,8 @@ pip install -r requirements-web.txt
 pip install -r requirements-browser.txt
 playwright install chromium
 
-python lm_studio_chat.py
-# or: python -m lm_studio_chat
+python relay.py
+# or: python -m relay
 ```
 
 Open **http://127.0.0.1:7860** in your browser.
@@ -80,13 +80,13 @@ Set environment variables in `.env` (loaded automatically) or export them before
 | `UNSLOTH_MODEL` | *(auto-detect)* | Pin a specific Unsloth model id |
 | `LM_STUDIO_MAX_TOKENS` | `32768` | Max completion tokens per round |
 | `LM_STUDIO_TEMPERATURE` | `0.3` | Sampling temperature |
-| `LM_STUDIO_CHAT_HOST` | `127.0.0.1` | UI bind address |
-| `LM_STUDIO_CHAT_PORT` | `7860` | UI port |
+| `RELAY_HOST` | `127.0.0.1` | UI bind address |
+| `RELAY_PORT` | `7860` | UI port |
 | `LM_STUDIO_SKILLS_DIRS` | — | Extra skill directories (`;` on Windows, `:` on Unix) |
 | `LM_STUDIO_INSPECT_PAGE_HEADED` | — | Set `1`/`true` to show Playwright browser window |
 | `LM_STUDIO_ALLOW_UNRESTRICTED_PATHS` | — | Set `1`/`true` to disable project path confinement for file tools and `cd` |
 
-Session logs are written to `~/.lm_studio_chat_logs/chat_<session_id>.log`.
+Session logs are written to `~/.relay_logs/chat_<session_id>.log`.
 
 ### Using OpenAI instead of LM Studio
 
@@ -94,7 +94,7 @@ Session logs are written to `~/.lm_studio_chat_logs/chat_<session_id>.log`.
 set LLM_PROVIDER=openai
 set OPENAI_API_KEY=sk-...
 set OPENAI_MODEL=gpt-4o
-python lm_studio_chat.py
+python relay.py
 ```
 
 Messages and tool output are sent to OpenAI's API. Shell/file tools still run locally — use with care.
@@ -107,7 +107,7 @@ Claude is called through [Anthropic's OpenAI-compatible endpoint](https://platfo
 set LLM_PROVIDER=anthropic
 set ANTHROPIC_API_KEY=sk-ant-...
 set ANTHROPIC_MODEL=claude-sonnet-5-5
-python lm_studio_chat.py
+python relay.py
 ```
 
 Other current model ids include `claude-opus-5-5` and `claude-haiku-5-5`. Claude 4.7 and later reject a temperature below 1, so temperature is omitted unless you set `ANTHROPIC_TEMPERATURE` (useful for older Claude models). Messages and tool output are sent to Anthropic. Shell/file tools still run locally.
@@ -120,7 +120,7 @@ Gemini is called through [Google's OpenAI-compatible endpoint](https://ai.google
 set LLM_PROVIDER=google
 set GOOGLE_AI_STUDIO_API_KEY=...
 set GOOGLE_AI_STUDIO_MODEL=gemini-3.8-flash
-python lm_studio_chat.py
+python relay.py
 ```
 
 Which models you can call depends on your account; some older ones (such as `gemini-2.5-flash`) are closed to new users. Temperature is omitted unless you set `GOOGLE_AI_STUDIO_TEMPERATURE`, because Google recommends the model default for current Gemini models. Google lists this compatibility layer as beta. Messages and tool output are sent to Google. Shell/file tools still run locally.
@@ -145,7 +145,7 @@ set UNSLOTH_BASE_URL=http://127.0.0.1:8001/v1
 python unsloth_chat.py
 ```
 
-You can also set `LLM_PROVIDER=unsloth` and run `python lm_studio_chat.py`. Tool calling needs a server that supports OpenAI tools (vLLM/SGLang, or llama-server with `--jinja`).
+You can also set `LLM_PROVIDER=unsloth` and run `python relay.py`. Tool calling needs a server that supports OpenAI tools (vLLM/SGLang, or llama-server with `--jinja`).
 
 ## Agent Skills
 
@@ -165,17 +165,17 @@ Each skill needs at least `name` and `description` in frontmatter. The model can
 
 - **File tools are project-scoped by default:** `read_file`, `write_file`, `str_replace`, `search_file`, and `list_dir` are restricted to the open project (or initial working directory). Attempts to access paths outside the sandbox are rejected. To disable this restriction, set `LM_STUDIO_ALLOW_UNRESTRICTED_PATHS=1`.
 - **Shell commands (`run_command`) are not fully sandboxed:** while bare `cd` is constrained to the sandbox, arbitrary shell commands execute with the permissions of the running process. Treat shell execution with appropriate caution.
-- The server has **no authentication**. Keep `LM_STUDIO_CHAT_HOST=127.0.0.1` — do **not** expose it to the network.
+- The server has **no authentication**. Keep `RELAY_HOST=127.0.0.1` — do **not** expose it to the network.
 - Do not run against untrusted prompts on a machine with sensitive data unless you understand the risk.
 - With `LLM_PROVIDER=openai`, `anthropic`, or `google`, chat content is sent to that provider; local tools still execute on your machine.
 
 ## Project layout
 
 ```
-lm_studio_chat/     Python package (API, chat engine, tools)
+relay/              Python package (API, chat engine, tools)
 static/             Web UI (HTML + JS)
 skills/             Bundled agent skills
-lm_studio_chat.py   Backward-compatible entry shim
+relay.py            Entry script
 ```
 
 ## Development
@@ -183,7 +183,7 @@ lm_studio_chat.py   Backward-compatible entry shim
 ```bash
 pip install -r requirements-web.txt -r requirements-browser.txt
 playwright install chromium
-python lm_studio_chat.py
+python relay.py
 ```
 
 Internal refactor notes: [`docs/REFACTOR_PLAN.md`](docs/REFACTOR_PLAN.md), [`docs/MULTI_PROVIDER_PLAN.md`](docs/MULTI_PROVIDER_PLAN.md).

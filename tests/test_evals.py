@@ -16,7 +16,7 @@ from evals.runner import RunRecord
 from evals.scoring import ToolCall, check_answer, score_run, tool_selection_score
 from evals.selfcheck import run_selfcheck
 from evals.tasks import TaskError, load_tasks, validate_task
-from lm_studio_chat.tools.schemas import TOOL_SCHEMAS
+from relay.tools.schemas import TOOL_SCHEMAS
 
 
 def tc(name, result="ok", **args):
@@ -349,7 +349,7 @@ def test_a_model_that_runs_out_of_script_is_recorded_as_an_error():
     # a "model" that stops answering mid-task, like a dropped connection
     from evals.fake import ScriptedClient, call
     from evals.runner import run_task
-    from lm_studio_chat.providers.base import LLMProvider
+    from relay.providers.base import LLMProvider
 
     def factory(_ctx):
         client = ScriptedClient([call("read_file", path="notes.txt")])  # then nothing
@@ -368,7 +368,7 @@ def test_cli_run_report_and_check_end_to_end(tmp_path, monkeypatch, capsys):
     """`run` against a (scripted) provider writes a result file that `report` and `check` can use."""
     import evals.__main__ as cli
     from evals.fake import ScriptedClient, call, say
-    from lm_studio_chat.providers.base import LLMProvider
+    from relay.providers.base import LLMProvider
 
     script = [call("read_file", path="notes.txt"), say("Thursday 02:00 UTC")] * 2  # two repeats
     provider = LLMProvider(
@@ -399,7 +399,7 @@ def test_cli_run_report_and_check_end_to_end(tmp_path, monkeypatch, capsys):
 def test_verbose_run_prints_task_tool_calls_and_answer_and_saves_a_full_log(tmp_path, monkeypatch, capsys):
     import evals.__main__ as cli
     from evals.fake import ScriptedClient, call, say
-    from lm_studio_chat.providers.base import LLMProvider
+    from relay.providers.base import LLMProvider
 
     long_answer = "Thursday 02:00 UTC. " + "padding " * 200
     provider = LLMProvider(

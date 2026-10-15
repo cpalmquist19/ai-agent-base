@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from lm_studio_chat.tools.builtin import tool_calculate
-from lm_studio_chat.tools.filesystem import (
+from relay.tools.builtin import tool_calculate
+from relay.tools.filesystem import (
     resolve_tool_path,
     tool_list_dir,
     tool_read_file,

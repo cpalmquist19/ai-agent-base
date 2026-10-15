@@ -6,7 +6,7 @@ from evals.fake import ScriptedClient
 from evals.policies import POLICIES, Policy
 from evals.runner import RunContext, RunRecord, run_task
 from evals.tasks import load_tasks
-from lm_studio_chat.providers.base import LLMProvider
+from relay.providers.base import LLMProvider
 
 
 def scripted_provider_factory(policy: Policy):

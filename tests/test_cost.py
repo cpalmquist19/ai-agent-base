@@ -26,7 +26,7 @@ from evals.cost import (
 from evals.fake import call, say
 from evals.report import build_result, render_markdown
 from evals.runner import RunRecord
-from lm_studio_chat.chat.usage import add_usage, empty_usage, read_usage
+from relay.chat.usage import add_usage, empty_usage, read_usage
 from tests.conftest import drive
 
 PRICING = {

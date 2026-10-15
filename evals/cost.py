@@ -21,7 +21,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from lm_studio_chat.chat.usage import add_usage, empty_usage
+from relay.chat.usage import add_usage, empty_usage
 
 PRICING_PATH = Path(__file__).parent / "pricing.json"
 LOCAL_PROVIDERS = frozenset({"lm_studio", "unsloth"})
@@ -88,7 +88,7 @@ def _tokens(text: Any) -> int:
 @functools.lru_cache(maxsize=1)
 def tool_schema_tokens() -> int:
     try:
-        from lm_studio_chat.tools.registry import available_tool_schemas
+        from relay.tools.registry import available_tool_schemas
 
         return _tokens(json.dumps(available_tool_schemas()))
     except Exception:
@@ -98,7 +98,7 @@ def tool_schema_tokens() -> int:
 @functools.lru_cache(maxsize=1)
 def system_prompt_tokens() -> int:
     try:
-        from lm_studio_chat.config import SYSTEM_PROMPT
+        from relay.config import SYSTEM_PROMPT
 
         return _tokens(SYSTEM_PROMPT) + _PROMPT_EXTRAS_TOKENS
     except Exception:
